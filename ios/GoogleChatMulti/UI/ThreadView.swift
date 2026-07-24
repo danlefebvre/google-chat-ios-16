@@ -36,9 +36,9 @@ struct ThreadView: View {
                     .padding(16)
                 }
                 .onChange(of: messages.count) { _ in
-                    if let last = messages.reversed().first?.id {
+                    if let newest = messages.reversed().last?.id {
                         withAnimation(.easeOut(duration: 0.2)) {
-                            proxy.scrollTo(last, anchor: .bottom)
+                            proxy.scrollTo(newest, anchor: .bottom)
                         }
                     }
                 }
