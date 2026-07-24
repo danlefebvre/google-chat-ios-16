@@ -13,8 +13,8 @@ See **[docs/PLAN.md](docs/PLAN.md)** for the full product/technical plan:
 
 - Native SwiftUI + Google Chat API (not a web wrapper)
 - Multi-account OAuth with a merged inbox
-- Local notifications first; optional APNs relay for reliable dual-account push
-- TestFlight / sideload distribution (not App Store–first)
+- **APNs-first** dual-account push via a small relay (local notifications are fallback only)
+- TestFlight distribution (not App Store–first)
 
 ## Status
 
