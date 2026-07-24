@@ -10,6 +10,7 @@ export type GoogleEventsClientOptions = {
 
 /** Workspace Events max lifetime with includeResource (no DWD) is ~4 hours. */
 const SUBSCRIPTION_TTL_SECONDS = 4 * 60 * 60;
+const GOOGLE_FETCH_TIMEOUT_MS = 15_000;
 
 /**
  * Thin Google Workspace Events + OAuth revoke client.
@@ -18,7 +19,9 @@ const SUBSCRIPTION_TTL_SECONDS = 4 * 60 * 60;
 export function createGoogleEventsClient(
   options: GoogleEventsClientOptions,
 ): EventsClient {
-  const fetchImpl = options.fetchImpl ?? fetch;
+  const rawFetch = options.fetchImpl ?? fetch;
+  const fetchImpl: typeof fetch = (input, init) =>
+    fetchWithTimeout(rawFetch, input, init, GOOGLE_FETCH_TIMEOUT_MS);
 
   return {
     async createSubscription(input) {
@@ -293,7 +296,9 @@ export function createGoogleAccountOwnershipVerifier(options: {
   oauthClientSecret: string;
   fetchImpl?: typeof fetch;
 }): AccountOwnershipVerifier {
-  const fetchImpl = options.fetchImpl ?? fetch;
+  const rawFetch = options.fetchImpl ?? fetch;
+  const fetchImpl: typeof fetch = (input, init) =>
+    fetchWithTimeout(rawFetch, input, init, GOOGLE_FETCH_TIMEOUT_MS);
   return async (input) => {
     try {
       const accessToken = await refreshAccessToken(fetchImpl, {
@@ -349,6 +354,31 @@ export function createGoogleAccountOwnershipVerifier(options: {
 
 function sanitizeLabel(value: string): string {
   return value.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 63);
+}
+
+async function fetchWithTimeout(
+  fetchImpl: typeof fetch,
+  input: Parameters<typeof fetch>[0],
+  init: Parameters<typeof fetch>[1],
+  timeoutMs: number,
+): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const parentSignal = init?.signal;
+    if (parentSignal) {
+      if (parentSignal.aborted) {
+        controller.abort();
+      } else {
+        parentSignal.addEventListener("abort", () => controller.abort(), {
+          once: true,
+        });
+      }
+    }
+    return await fetchImpl(input, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 function sleep(ms: number): Promise<void> {
