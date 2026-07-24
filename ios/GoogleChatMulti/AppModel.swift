@@ -81,8 +81,13 @@ final class AppModel: ObservableObject {
     func markRelayRegistration(pending: Bool, for accountId: AccountID) {
         guard var account = accounts.first(where: { $0.id == accountId }) else { return }
         account.relayRegistrationPending = pending
-        let refresh = authStore.refreshToken(for: accountId) ?? ""
-        let access = authStore.accessToken(for: accountId) ?? ""
+        guard
+            let refresh = authStore.refreshToken(for: accountId),
+            let access = authStore.accessToken(for: accountId)
+        else {
+            // Abort save so missing lookups cannot overwrite persisted tokens.
+            return
+        }
         authStore.save(account: account, refreshToken: refresh, accessToken: access)
         accounts = authStore.loadAccounts()
     }
