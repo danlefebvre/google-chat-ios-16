@@ -5,6 +5,11 @@ import GoogleChatMultiCore
 import SQLite3
 #endif
 
+public enum ConversationCacheError: Error, Equatable, Sendable {
+    case databaseUnavailable
+    case transactionFailed(String)
+}
+
 /// Lightweight SQLite inbox cache (raw sqlite3; historically named GRDB*).
 /// Keeps recent conversation rows offline for iPhone 8 relaunch.
 public actor GRDBConversationCache: ConversationCaching {
@@ -92,7 +97,7 @@ public actor GRDBConversationCache: ConversationCaching {
         return rows
     }
 
-    private func insert(_ row: ConversationSummary) {
+    private func insert(_ row: ConversationSummary) -> Bool {
         let sql = """
         INSERT INTO conversations(
           composite_id, account_id, account_label, account_color_hex, space_name,
@@ -100,7 +105,7 @@ public actor GRDBConversationCache: ConversationCaching {
         ) VALUES (?,?,?,?,?,?,?,?,?,?);
         """
         var stmt: OpaquePointer?
-        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return }
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return false }
         defer { sqlite3_finalize(stmt) }
         bind(stmt, 1, row.compositeId)
         bind(stmt, 2, row.accountId.rawValue)
@@ -112,7 +117,11 @@ public actor GRDBConversationCache: ConversationCaching {
         sqlite3_bind_double(stmt, 8, row.lastActivityAt.timeIntervalSince1970)
         sqlite3_bind_int(stmt, 9, Int32(row.unreadCount))
         sqlite3_bind_int(stmt, 10, row.isDirectMessage ? 1 : 0)
-        sqlite3_step(stmt)
+        return sqlite3_step(stmt) == SQLITE_DONE
+    }
+
+    private func exec(_ db: OpaquePointer, _ sql: String) -> Bool {
+        sqlite3_exec(db, sql, nil, nil, nil) == SQLITE_OK
     }
 
     private func openAndMigrate() {
