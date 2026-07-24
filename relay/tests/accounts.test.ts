@@ -24,7 +24,7 @@ describe("AccountService", () => {
 
     const service = new AccountService({ store, events, crypto: cryptoStub() });
 
-    const account = await service.registerAccount({
+    const { account, relayCredential } = await service.registerAccount({
       accountId: "https://accounts.google.com|sub-work",
       email: "you@work.com",
       label: "Work",
@@ -33,8 +33,12 @@ describe("AccountService", () => {
 
     expect(account.accountId).toBe("https://accounts.google.com|sub-work");
     expect(account.subscriptionName).toBe("subscriptions/sub-1");
+    expect(relayCredential).toBeTruthy();
     expect(store.getAccount(account.accountId)?.encryptedRefreshToken).toBe(
       "enc:refresh-plain",
+    );
+    expect(store.getAccount(account.accountId)?.encryptedRelayCredential).toBe(
+      `enc:${relayCredential}`,
     );
     expect(events.createSubscription).toHaveBeenCalledOnce();
     expect(events.deleteSubscription).not.toHaveBeenCalled();
@@ -47,6 +51,7 @@ describe("AccountService", () => {
       email: "a@b.com",
       label: "Work",
       encryptedRefreshToken: "enc:old-rt",
+      encryptedRelayCredential: "enc:relay",
       subscriptionName: "subscriptions/old",
       subscriptionExpireTime: "2026-08-01T00:00:00Z",
       ntfyBindingActive: true,
@@ -101,6 +106,7 @@ describe("AccountService", () => {
       email: "a@b.com",
       label: "Work",
       encryptedRefreshToken: "enc:rt",
+      encryptedRelayCredential: "enc:relay",
       subscriptionName: "subscriptions/sub-1",
       subscriptionExpireTime: "2026-08-01T00:00:00Z",
       ntfyBindingActive: true,
@@ -137,6 +143,7 @@ describe("AccountService", () => {
       email: "a@b.com",
       label: "Work",
       encryptedRefreshToken: "enc:rt",
+      encryptedRelayCredential: "enc:relay",
       subscriptionName: "subscriptions/sub-1",
       subscriptionExpireTime: "2026-08-01T00:00:00Z",
       ntfyBindingActive: true,

@@ -137,7 +137,7 @@ export function createApp(options: CreateAppOptions): Express {
         res.status(403).json({ error: "ownership_mismatch" });
         return;
       }
-      const account = await accounts.registerAccount({
+      const { account, relayCredential } = await accounts.registerAccount({
         accountId,
         email,
         label,
@@ -146,6 +146,7 @@ export function createApp(options: CreateAppOptions): Express {
       res.status(201).json({
         accountId: account.accountId,
         subscriptionName: account.subscriptionName,
+        relayCredential,
       });
     } catch (err) {
       console.error("register account failed", err);
@@ -156,12 +157,13 @@ export function createApp(options: CreateAppOptions): Express {
   app.delete("/accounts/:accountId", async (req, res) => {
     try {
       const accountId = decodeURIComponent(req.params.accountId);
-      const refreshToken = bearerToken(req) || (req.body?.refreshToken as string | undefined);
-      if (!refreshToken) {
+      const relayCredential =
+        bearerToken(req) || (req.body?.relayCredential as string | undefined);
+      if (!relayCredential) {
         res.status(401).json({ error: "unauthorized" });
         return;
       }
-      if (!accounts.ownsRefreshToken(accountId, refreshToken)) {
+      if (!accounts.ownsRelayCredential(accountId, relayCredential)) {
         res.status(403).json({ error: "forbidden" });
         return;
       }
@@ -233,7 +235,7 @@ export function createApp(options: CreateAppOptions): Express {
         res.status(400).json({ error: "missing_fields" });
         return;
       }
-      const account = await accounts.registerAccount({
+      const { account, relayCredential } = await accounts.registerAccount({
         accountId,
         email,
         label,
@@ -242,6 +244,7 @@ export function createApp(options: CreateAppOptions): Express {
       res.status(201).json({
         accountId: account.accountId,
         subscriptionName: account.subscriptionName,
+        relayCredential,
       });
     } catch (err) {
       console.error("register account failed", err);

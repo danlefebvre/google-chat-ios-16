@@ -15,7 +15,7 @@ npm run dev
 Health: `GET /health`  
 Manual Phase 0 smoke: `POST /admin/test-ntfy` (Bearer admin token)
 
-**Security:** `ADMIN_TOKEN` is a relay-wide secret for ops routes only. Do **not** embed it in the iOS app. The app registers/tears down accounts via user-scoped `/accounts` routes authenticated with the account’s Google refresh token.
+**Security:** `ADMIN_TOKEN` is a relay-wide secret for ops routes only. Do **not** embed it in the iOS app. Registration accepts a Google refresh token (for Workspace Events) and returns an opaque relay-scoped credential; teardown/mute-style user account auth uses that credential, not the Google refresh token.
 
 ## Important routes
 
@@ -23,8 +23,8 @@ Manual Phase 0 smoke: `POST /admin/test-ntfy` (Bearer admin token)
 | --- | --- | --- |
 | GET | `/health` | Liveness |
 | POST | `/pubsub/push` | Pub/Sub push endpoint |
-| POST | `/accounts` | App: register account (body includes refresh token) |
-| DELETE | `/accounts/:accountId` | App: teardown (`Authorization: Bearer <refreshToken>`) |
+| POST | `/accounts` | App: register account (body includes refresh token; response includes `relayCredential`) |
+| DELETE | `/accounts/:accountId` | App: teardown (`Authorization: Bearer <relayCredential>`) |
 | POST | `/admin/test-ntfy` | Manual preview publish (admin token) |
 | POST | `/admin/accounts` | Ops: register Google account + create events subscription |
 | DELETE | `/admin/accounts/:accountId` | Ops: teardown (subscription → revoke token → wipe) |

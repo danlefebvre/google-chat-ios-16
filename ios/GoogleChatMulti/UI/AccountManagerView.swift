@@ -88,7 +88,7 @@ struct AccountManagerView: View {
             }
 
             Section("Notes") {
-                Text("OAuth uses GoogleSignIn UI + Keychain multi-account storage keyed by issuer/sub. Work accounts may need Workspace admin allowlisting. Relay registration uses your Google refresh token (admin token stays on the server).")
+                Text("OAuth uses GoogleSignIn UI + Keychain multi-account storage keyed by issuer/sub. Work accounts may need Workspace admin allowlisting. Relay registration sends your Google refresh token once and stores an opaque relay credential for teardown (admin token stays on the server).")
                     .font(.footnote)
                     .foregroundStyle(Color("SecondaryText"))
             }
@@ -104,7 +104,8 @@ struct AccountManagerView: View {
             return
         }
         do {
-            try await client.registerAccount(account: account, refreshToken: refreshToken)
+            let credential = try await client.registerAccount(account: account, refreshToken: refreshToken)
+            model.authStore.saveRelayCredential(credential, for: account.id)
             model.markRelayRegistration(pending: false, for: account.id)
         } catch {
             model.markRelayRegistration(pending: true, for: account.id)

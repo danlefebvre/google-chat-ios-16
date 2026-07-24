@@ -113,6 +113,9 @@ describe("admin API", () => {
       refreshToken: "rt-user",
     });
     expect(register.status).toBe(201);
+    expect(typeof register.body.relayCredential).toBe("string");
+    expect(register.body.relayCredential.length).toBeGreaterThan(16);
+    const relayCredential = register.body.relayCredential as string;
 
     const mismatched = await request(app).post("/accounts").send({
       accountId: "iss|other",
@@ -127,9 +130,15 @@ describe("admin API", () => {
       .set("Authorization", "Bearer wrong");
     expect(denied.status).toBe(403);
 
-    const removed = await request(app)
+    // Refresh token must not authorize teardown — only the relay credential.
+    const refreshDenied = await request(app)
       .delete("/accounts/iss%7Csub")
       .set("Authorization", "Bearer rt-user");
+    expect(refreshDenied.status).toBe(403);
+
+    const removed = await request(app)
+      .delete("/accounts/iss%7Csub")
+      .set("Authorization", `Bearer ${relayCredential}`);
     expect(removed.status).toBe(204);
   });
 });

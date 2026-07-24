@@ -11,6 +11,7 @@ describe("POST /admin/renew-subscriptions", () => {
       email: "a@b.com",
       label: "Work",
       encryptedRefreshToken: "v1:x:y:z",
+      encryptedRelayCredential: "enc:relay",
       subscriptionName: "subscriptions/old",
       subscriptionExpireTime: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
       ntfyBindingActive: true,
@@ -43,6 +44,7 @@ describe("POST /admin/renew-subscriptions", () => {
     store.upsertAccount({
       ...existing,
       encryptedRefreshToken: crypto.encrypt("refresh-token"),
+      encryptedRelayCredential: "enc:relay",
     });
 
     const res = await request(app)

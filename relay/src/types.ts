@@ -3,6 +3,8 @@ export type AccountRecord = {
   email: string;
   label: string;
   encryptedRefreshToken: string;
+  /** Opaque relay-scoped credential for user DELETE/mute auth (not the Google refresh token). */
+  encryptedRelayCredential: string;
   subscriptionName: string | null;
   subscriptionExpireTime: string | null;
   ntfyBindingActive: boolean;

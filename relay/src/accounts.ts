@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import type { AccountStore } from "./store.js";
 import type { AccountRecord, EventsClient, TokenCrypto } from "./types.js";
 
@@ -6,6 +7,12 @@ export type RegisterAccountInput = {
   email: string;
   label: string;
   refreshToken: string;
+};
+
+export type RegisterAccountResult = {
+  account: AccountRecord;
+  /** Plaintext opaque credential; returned once for the client to store. */
+  relayCredential: string;
 };
 
 export class AccountService {
@@ -23,7 +30,9 @@ export class AccountService {
     this.crypto = deps.crypto;
   }
 
-  async registerAccount(input: RegisterAccountInput): Promise<AccountRecord> {
+  async registerAccount(
+    input: RegisterAccountInput,
+  ): Promise<RegisterAccountResult> {
     const existing = this.store.getAccount(input.accountId);
     if (existing?.subscriptionName) {
       // Re-register must not orphan the previous Google subscription.
@@ -42,11 +51,14 @@ export class AccountService {
       refreshToken: input.refreshToken,
     });
 
+    const relayCredential = randomBytes(32).toString("base64url");
+
     const account: AccountRecord = {
       accountId: input.accountId,
       email: input.email,
       label: input.label,
       encryptedRefreshToken: this.crypto.encrypt(input.refreshToken),
+      encryptedRelayCredential: this.crypto.encrypt(relayCredential),
       subscriptionName: subscription.name,
       subscriptionExpireTime: subscription.expireTime,
       ntfyBindingActive: true,
@@ -56,7 +68,7 @@ export class AccountService {
     };
 
     this.store.upsertAccount(account);
-    return account;
+    return { account, relayCredential };
   }
 
   /**
@@ -99,25 +111,33 @@ export class AccountService {
       current = {
         ...current,
         encryptedRefreshToken: "",
+        encryptedRelayCredential: "",
         ntfyBindingActive: false,
       };
       this.store.upsertAccount(current);
     } else if (current.ntfyBindingActive) {
-      current = { ...current, ntfyBindingActive: false };
+      current = {
+        ...current,
+        encryptedRelayCredential: "",
+        ntfyBindingActive: false,
+      };
       this.store.upsertAccount(current);
     }
 
     this.store.deleteAccount(accountId);
   }
 
-  /** True when the presented refresh token matches the stored ciphertext. */
-  ownsRefreshToken(accountId: string, refreshToken: string): boolean {
+  /** True when the presented opaque relay credential matches the stored ciphertext. */
+  ownsRelayCredential(accountId: string, relayCredential: string): boolean {
     const existing = this.store.getAccount(accountId);
-    if (!existing || !existing.encryptedRefreshToken) {
+    if (!existing || !existing.encryptedRelayCredential) {
       return false;
     }
     try {
-      return this.crypto.decrypt(existing.encryptedRefreshToken) === refreshToken;
+      return (
+        this.crypto.decrypt(existing.encryptedRelayCredential) ===
+        relayCredential
+      );
     } catch {
       return false;
     }

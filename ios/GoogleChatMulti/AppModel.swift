@@ -101,13 +101,13 @@ final class AppModel: ObservableObject {
                 errorMessage = "Relay not configured"
                 return
             }
-            guard let refresh = authStore.refreshToken(for: accountId), !refresh.isEmpty else {
-                banner = "Missing refresh token; cannot tear down relay registration."
-                errorMessage = "Missing refresh token"
+            guard let relayCredential = authStore.relayCredential(for: accountId), !relayCredential.isEmpty else {
+                banner = "Missing relay credential; cannot tear down relay registration."
+                errorMessage = "Missing relay credential"
                 return
             }
             do {
-                try await client.removeAccount(accountId, refreshToken: refresh)
+                try await client.removeAccount(accountId, relayCredential: relayCredential)
             } catch {
                 banner = "Relay teardown failed; local account kept. Retry remove later."
                 errorMessage = error.localizedDescription

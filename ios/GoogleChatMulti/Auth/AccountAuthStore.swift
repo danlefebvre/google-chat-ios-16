@@ -11,6 +11,8 @@ public protocol AccountAuthStore: AnyObject {
     func remove(accountId: AccountID)
     func accessToken(for accountId: AccountID) -> String?
     func refreshToken(for accountId: AccountID) -> String?
+    func relayCredential(for accountId: AccountID) -> String?
+    func saveRelayCredential(_ credential: String, for accountId: AccountID)
     func updateAccessToken(for accountId: AccountID, accessToken: String)
     func asTokenProvider() -> any TokenProviding
 }
@@ -52,6 +54,7 @@ public final class KeychainAccountAuthStore: AccountAuthStore {
         }
         delete(key: tokenKey(accountId, kind: "refresh"))
         delete(key: tokenKey(accountId, kind: "access"))
+        delete(key: tokenKey(accountId, kind: "relay"))
     }
 
     public func accessToken(for accountId: AccountID) -> String? {
@@ -62,6 +65,16 @@ public final class KeychainAccountAuthStore: AccountAuthStore {
     public func refreshToken(for accountId: AccountID) -> String? {
         guard let data = read(key: tokenKey(accountId, kind: "refresh")) else { return nil }
         return String(data: data, encoding: .utf8)
+    }
+
+    public func relayCredential(for accountId: AccountID) -> String? {
+        guard let data = read(key: tokenKey(accountId, kind: "relay")) else { return nil }
+        return String(data: data, encoding: .utf8)
+    }
+
+    public func saveRelayCredential(_ credential: String, for accountId: AccountID) {
+        guard let data = credential.data(using: .utf8) else { return }
+        write(key: tokenKey(accountId, kind: "relay"), data: data)
     }
 
     public func updateAccessToken(for accountId: AccountID, accessToken: String) {
@@ -172,6 +185,7 @@ public final class InMemoryAccountAuthStore: AccountAuthStore {
     private var accounts: [LinkedAccount] = []
     private var access: [String: String] = [:]
     private var refresh: [String: String] = [:]
+    private var relay: [String: String] = [:]
 
     public init() {}
 
@@ -188,6 +202,7 @@ public final class InMemoryAccountAuthStore: AccountAuthStore {
         accounts.removeAll { $0.id == accountId }
         access[accountId.rawValue] = nil
         refresh[accountId.rawValue] = nil
+        relay[accountId.rawValue] = nil
     }
 
     public func accessToken(for accountId: AccountID) -> String? {
@@ -196,6 +211,14 @@ public final class InMemoryAccountAuthStore: AccountAuthStore {
 
     public func refreshToken(for accountId: AccountID) -> String? {
         refresh[accountId.rawValue]
+    }
+
+    public func relayCredential(for accountId: AccountID) -> String? {
+        relay[accountId.rawValue]
+    }
+
+    public func saveRelayCredential(_ credential: String, for accountId: AccountID) {
+        relay[accountId.rawValue] = credential
     }
 
     public func updateAccessToken(for accountId: AccountID, accessToken: String) {

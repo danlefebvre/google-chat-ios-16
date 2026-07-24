@@ -10,6 +10,7 @@ describe("renewExpiringSubscriptions", () => {
       email: "a@b.com",
       label: "Work",
       encryptedRefreshToken: "enc:rt",
+      encryptedRelayCredential: "enc:relay",
       subscriptionName: "subscriptions/old",
       subscriptionExpireTime: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
       ntfyBindingActive: true,
@@ -22,6 +23,7 @@ describe("renewExpiringSubscriptions", () => {
       email: "b@b.com",
       label: "Personal",
       encryptedRefreshToken: "enc:rt2",
+      encryptedRelayCredential: "enc:relay",
       subscriptionName: "subscriptions/ok",
       subscriptionExpireTime: new Date(
         Date.now() + 10 * 24 * 60 * 60 * 1000,
@@ -73,6 +75,7 @@ describe("renewExpiringSubscriptions", () => {
       email: "a@b.com",
       label: "Work",
       encryptedRefreshToken: "enc:rt",
+      encryptedRelayCredential: "enc:relay",
       subscriptionName: "subscriptions/old",
       subscriptionExpireTime: new Date(Date.now() + 1000).toISOString(),
       ntfyBindingActive: true,
