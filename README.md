@@ -24,7 +24,7 @@ See **[docs/PLAN.md](docs/PLAN.md)** for the full product/technical plan.
 
 | Path | Role |
 | --- | --- |
-| `ios/` | SwiftUI app + `GoogleChatMultiCore` package |
+| `ios/` | SwiftUI app + `GoogleChatMultiCore` package (committed `.xcodeproj`) |
 | `relay/` | TypeScript ntfy relay (Cloud Run / Fly) |
 | `scripts/` | Phase 0 bootstrap helpers |
 | `docs/PLAN.md` | Locked product decisions |
@@ -37,13 +37,15 @@ See **[docs/PLAN.md](docs/PLAN.md)** for the full product/technical plan.
 
 ## Status
 
-MVP implementation in progress:
+Consolidated MVP base (best of parallel implementation PRs):
 
-- [x] Relay with TDD (`npm test` — health, ntfy publish, mutes, quiet hours, teardown, renewal)
-- [x] iOS Core package with TDD (`swift test` — account IDs, inbox merge, deep links, Chat API)
-- [x] SwiftUI app scaffold (inbox, thread, accounts, Keychain, SQLite cache, deep links)
+- [x] Relay with TDD (`npm test` — health, ntfy publish, mutes, quiet hours, teardown, renewal, Pub/Sub auth)
+- [x] iOS Core package with TDD (`swift test` — account IDs, inbox merge, deep links, Chat API, media)
+- [x] SwiftUI app scaffold (inbox, thread, accounts, GoogleSignIn, Keychain, SQLite cache, deep links)
+- [x] Attachment upload wired through Chat media API; capped media download helper
 - [ ] Phase 0 on-device: ntfy install + OAuth smoke + relay→ntfy alert on iPhone 8
 - [ ] Wire real Google Cloud project / Workspace Events subscriptions
+- [ ] Add GoogleSignIn SPM package reference in Xcode (coordinator is ready)
 
 ## Develop
 
@@ -67,6 +69,8 @@ swift test
 ### Full automated suite
 
 ```bash
+make test
+# or:
 ./scripts/run-tests.sh
 ```
 
@@ -81,3 +85,14 @@ If Swift is unavailable (e.g. Linux CI without a toolchain), set `SKIP_SWIFT_TES
 ```
 
 Open `ios/GoogleChatMulti.xcodeproj` on a Mac to sideload to the iPhone 8.
+
+## Consolidation notes
+
+This branch merges the strongest pieces from parallel MVP PRs:
+
+| Source | Kept |
+| --- | --- |
+| PR #6 | Base: Xcode project, GoogleSignIn, encrypted durable relay store, admin/user auth split |
+| PR #8 | Capped media download, Pub/Sub verify token, HTTP server timeouts, broader OAuth scopes, Makefile |
+| PR #7 | `InAppBanner` model for foreground fallback |
+| PR #9 | End-to-end attachment upload → message create wiring |

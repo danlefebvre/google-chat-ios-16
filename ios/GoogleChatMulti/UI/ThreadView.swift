@@ -127,18 +127,37 @@ struct ThreadView: View {
     }
 
     private func uploadAttachment(_ item: PhotosPickerItem) async {
-        guard let conversation else { return }
+        guard let conversation, let api = await apiClient() else { return }
+        isSending = true
+        defer {
+            isSending = false
+            pickerItem = nil
+        }
         do {
             guard let data = try await item.loadTransferable(type: Data.self) else { return }
             let limited = AttachmentMemory.limitImageData(data, maxBytes: 1_500_000)
-            // MVP: send a note that an attachment was selected; full media upload uses Chat media API.
-            draft = draft.isEmpty
-                ? "[Attachment ready: \(limited.count) bytes — upload via media API next]"
-                : draft
-            pickerItem = nil
-            _ = conversation
+            let uploaded = try await api.uploadAttachment(
+                accountId: conversation.accountId,
+                spaceName: conversation.spaceName,
+                filename: "photo.jpg",
+                mimeType: "image/jpeg",
+                data: limited
+            )
+            guard let token = uploaded.attachmentUploadToken else {
+                model.banner = "Upload succeeded but no attachment token returned."
+                return
+            }
+            let caption = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+            let message = try await api.sendMessage(
+                accountId: conversation.accountId,
+                spaceName: conversation.spaceName,
+                text: caption.isEmpty ? "📷" : caption,
+                attachmentUploadTokens: [token]
+            )
+            messages.insert(message, at: 0)
+            draft = ""
         } catch {
-            model.banner = "Could not load attachment."
+            model.banner = "Attachment upload failed."
         }
     }
 

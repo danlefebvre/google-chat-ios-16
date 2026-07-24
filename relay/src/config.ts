@@ -9,6 +9,8 @@ const envSchema = z.object({
   NTFY_TOPIC: z.string().min(8),
   NTFY_ACCESS_TOKEN: z.string().min(1),
   DEEP_LINK_SCHEME: z.string().default("googlechatmulti"),
+  /** Optional shared secret for Pub/Sub push verification (`?token=`). */
+  PUBSUB_VERIFY_TOKEN: z.string().min(8).optional(),
   GOOGLE_PROJECT_ID: z.string().optional(),
   GOOGLE_PUBSUB_TOPIC: z.string().optional(),
   GOOGLE_OAUTH_CLIENT_ID: z.string().optional(),
@@ -27,6 +29,7 @@ export type AppConfig = {
   ntfy: NtfyConfig;
   deepLinkScheme: string;
   accountStorePath: string;
+  pubsubVerifyToken?: string;
   google?: {
     projectId: string;
     pubsubTopic: string;
@@ -64,6 +67,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     adminToken: parsed.ADMIN_TOKEN,
     tokenSecret: parsed.RELAY_TOKEN_SECRET,
     accountStorePath: parsed.ACCOUNT_STORE_PATH,
+    pubsubVerifyToken: parsed.PUBSUB_VERIFY_TOKEN,
     ntfy: {
       baseUrl: parsed.NTFY_BASE_URL,
       topic: parsed.NTFY_TOPIC,

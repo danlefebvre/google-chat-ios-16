@@ -1,3 +1,4 @@
+import { createServer } from "node:http";
 import { createApp } from "./app.js";
 import { loadConfig } from "./config.js";
 import { FileAccountStore } from "./store.js";
@@ -18,12 +19,20 @@ async function main(): Promise<void> {
     adminToken: config.adminToken,
     deepLinkScheme: config.deepLinkScheme,
     tokenSecret: config.tokenSecret,
+    pubsubVerifyToken: config.pubsubVerifyToken,
     google: config.google,
   });
 
-  app.listen(config.port, () => {
+  // Explicit timeouts (from PR #8 Go relay pattern) to mitigate Slowloris-style hangs.
+  const server = createServer(app);
+  server.requestTimeout = 30_000;
+  server.headersTimeout = 15_000;
+  server.keepAliveTimeout = 65_000;
+  server.timeout = 60_000;
+
+  server.listen(config.port, () => {
     console.log(
-      `google-chat-ntfy-relay listening on :${config.port} → ${config.ntfy.baseUrl}/${config.ntfy.topic}`,
+      `google-chat-ntfy-relay listening on :${config.port} → ${config.ntfy.baseUrl}/<topic>`,
     );
   });
 }

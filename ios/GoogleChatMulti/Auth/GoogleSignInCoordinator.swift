@@ -64,12 +64,16 @@ final class GoogleSignInCoordinator: ObservableObject {
             return
         }
 
+        // Chat client scopes + Workspace Events–capable scopes so the same
+        // refresh token can register relay subscriptions (from PR #8 mix-in).
         let scopes = [
             "openid",
             "email",
             "profile",
             "https://www.googleapis.com/auth/chat.spaces.readonly",
+            "https://www.googleapis.com/auth/chat.spaces",
             "https://www.googleapis.com/auth/chat.messages",
+            "https://www.googleapis.com/auth/chat.messages.readonly",
             "https://www.googleapis.com/auth/chat.users.readstate",
         ]
 

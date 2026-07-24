@@ -124,4 +124,87 @@ describe("POST /pubsub/push", () => {
     expect(res.status).toBe(204);
     expect(fetchMock).not.toHaveBeenCalled();
   });
+
+  it("rejects push requests when verify token is configured and missing", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const app = createApp({
+      store: new InMemoryStore(),
+      ntfy: {
+        baseUrl: "https://ntfy.sh",
+        topic: "secret-topic",
+        accessToken: "tk",
+      },
+      adminToken: "admin-secret",
+      pubsubVerifyToken: "pubsub-shared-secret",
+    });
+
+    const res = await request(app).post("/pubsub/push").send({
+      message: {
+        data: encodeData({ message: { name: "spaces/A/messages/B", text: "x" } }),
+        attributes: { accountId: "iss|sub" },
+      },
+    });
+
+    expect(res.status).toBe(401);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("accepts push requests with a matching verify token query param", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: async () => "ok",
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const store = new InMemoryStore();
+    store.upsertAccount({
+      accountId: "iss|sub-work",
+      email: "you@work.com",
+      label: "Work",
+      encryptedRefreshToken: "enc",
+      subscriptionName: "subscriptions/sub-1",
+      subscriptionExpireTime: "2026-08-01T00:00:00Z",
+      ntfyBindingActive: true,
+      muted: false,
+      mutedSpaces: [],
+      createdAt: new Date().toISOString(),
+    });
+
+    const app = createApp({
+      store,
+      ntfy: {
+        baseUrl: "https://ntfy.sh",
+        topic: "secret-topic",
+        accessToken: "tk",
+      },
+      adminToken: "admin-secret",
+      pubsubVerifyToken: "pubsub-shared-secret",
+    });
+
+    const res = await request(app)
+      .post("/pubsub/push")
+      .query({ token: "pubsub-shared-secret" })
+      .send({
+        message: {
+          data: encodeData({
+            message: {
+              name: "spaces/AAA/messages/BBB",
+              space: { name: "spaces/AAA", displayName: "#eng-standup" },
+              sender: { displayName: "Alice" },
+              text: "deploy looks good",
+            },
+          }),
+          attributes: {
+            accountId: "iss|sub-work",
+            "ce-type": "google.workspace.chat.message.v1.created",
+          },
+        },
+      });
+
+    expect(res.status).toBe(204);
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
 });

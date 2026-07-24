@@ -14,6 +14,8 @@ export type CreateAppOptions = {
   adminToken: string;
   deepLinkScheme?: string;
   tokenSecret?: string;
+  /** When set, `/pubsub/push` requires matching `?token=` (or `X-Goog-Channel-Token`). */
+  pubsubVerifyToken?: string;
   eventsClient?: EventsClient;
   google?: {
     projectId: string;
@@ -69,6 +71,18 @@ export function createApp(options: CreateAppOptions): Express {
 
   app.post("/pubsub/push", async (req: Request, res: Response) => {
     try {
+      if (options.pubsubVerifyToken) {
+        const queryToken =
+          typeof req.query.token === "string" ? req.query.token : "";
+        const headerToken = req.header("x-goog-channel-token") ?? "";
+        if (
+          queryToken !== options.pubsubVerifyToken &&
+          headerToken !== options.pubsubVerifyToken
+        ) {
+          res.status(401).json({ error: "unauthorized" });
+          return;
+        }
+      }
       const result = await handlePubSubPush({
         body: req.body as PubSubPushBody,
         store: options.store,

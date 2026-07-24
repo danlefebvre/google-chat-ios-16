@@ -68,10 +68,18 @@ public actor ChatAPIClient {
     public func sendMessage(
         accountId: AccountID,
         spaceName: String,
-        text: String
+        text: String,
+        attachmentUploadTokens: [String] = []
     ) async throws -> ChatMessage {
         let url = baseURL.appendingPathComponent("\(spaceName)/messages")
-        return try await post(url, accountId: accountId, body: CreateMessageRequest(text: text))
+        let attachments = attachmentUploadTokens.isEmpty
+            ? nil
+            : attachmentUploadTokens.map(CreateMessageAttachment.init(uploadToken:))
+        return try await post(
+            url,
+            accountId: accountId,
+            body: CreateMessageRequest(text: text, attachment: attachments)
+        )
     }
 
     public func addReaction(

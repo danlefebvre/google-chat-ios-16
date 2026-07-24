@@ -5,7 +5,8 @@ import GoogleChatMultiCore
 import SQLite3
 #endif
 
-/// Lightweight SQLite cache (GRDB-compatible schema). Keeps recent threads offline.
+/// Lightweight SQLite inbox cache (raw sqlite3; historically named GRDB*).
+/// Keeps recent conversation rows offline for iPhone 8 relaunch.
 public actor GRDBConversationCache: ConversationCaching {
     private let dbPath: String
     private var db: OpaquePointer?
