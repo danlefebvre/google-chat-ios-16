@@ -1,9 +1,13 @@
 import request from "supertest";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createApp } from "../src/app.js";
 import { InMemoryStore } from "../src/store.js";
 
 describe("admin API", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it("rejects missing admin token", async () => {
     const app = createApp({
       store: new InMemoryStore(),
@@ -51,8 +55,6 @@ describe("admin API", () => {
     const [, init] = fetchMock.mock.calls[0]!;
     expect(init.headers.Title).toBe("[Work] #eng-standup");
     expect(init.body).toBe("Alice: deploy looks good");
-
-    vi.unstubAllGlobals();
   });
 
   it("returns 502 when test-ntfy publish fails", async () => {
@@ -80,7 +82,6 @@ describe("admin API", () => {
 
     expect(res.status).toBe(502);
     expect(res.body).toEqual({ error: "publish_failed" });
-    vi.unstubAllGlobals();
   });
 
   it("registers and removes accounts via user-scoped routes without admin token", async () => {
