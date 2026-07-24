@@ -17,6 +17,12 @@ See **[docs/PLAN.md](docs/PLAN.md)** for the full product/technical plan:
 - **ntfy-first** dual-account alerts via a small relay (no APNs in our app; free Apple sideload)
 - Local in-app banners only as fallback when the Chat app is already open
 
+## Locked decisions
+
+- Free Apple sideload + **ntfy.sh** alerts (message previews)
+- N Google accounts (start with personal + work); Workspace admin will allowlist OAuth
+- Heavy MVP: spaces/DMs, text, reactions, attachments
+
 ## Status
 
-Planning only — implementation not started.
+Planning only — implementation not started. Decisions locked; ready to build when you say go.

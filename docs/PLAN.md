@@ -27,9 +27,12 @@ Ship **A**. Use Safari only as a temporary bridge while the native MVP is built.
 
 **Decisions locked:**
 
-- **Notifications:** **ntfy** is first-class (not APNs in our app).
-- **Apple account:** **Free** Xcode / sideload is enough for the Chat client (no TestFlight / no app push entitlement).
-- Local notifications in our app are only a **fallback** while the app is open.
+- **Notifications:** **ntfy** is first-class (not APNs in our app); host on **`ntfy.sh`**; bodies include **message preview**
+- **Apple account:** **Free** Xcode / sideload (no TestFlight / no app push entitlement)
+- **Accounts:** **N** (start with personal + work)
+- **Work Google:** you are **Workspace admin** and will allowlist the OAuth client
+- **MVP floor:** **heavy** — spaces/DMs, text, reactions, attachments
+- Local notifications in our app are only a **fallback** while the app is open
 
 ---
 
@@ -67,8 +70,8 @@ Our sideloaded app cannot use APNs without a paid Apple Developer Program member
 
 | Option | Cost | Notes |
 | --- | --- | --- |
-| Public `ntfy.sh` | Free | Use a **hard-to-guess topic** + access token if available; rate limits apply |
-| Self-hosted ntfy | Free (VPS) | Best privacy/control; relay points at your server |
+| **Public `ntfy.sh` (chosen)** | Free | Use a **hard-to-guess topic** + access token; watch rate limits |
+| Self-hosted ntfy | Free (VPS) | Later option if privacy/limits require it |
 
 Requires:
 
