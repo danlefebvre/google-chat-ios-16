@@ -42,7 +42,6 @@ test-results/
 
 # Maven
 target/
-dist/
 
 # JetBrains IDE
 .idea/
@@ -68,3 +67,13 @@ Thumbs.db
 *.flv
 *.mov
 *.wmv
+
+# Project-specific
+relay/data/
+.worktrees/
+*.xcuserstate
+DerivedData/
+.swiftpm/
+ios/GoogleChatMultiCore/.build/
+*.xcodeproj/xcuserdata/
+*.xcworkspace/xcuserdata/
