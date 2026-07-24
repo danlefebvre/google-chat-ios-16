@@ -23,6 +23,23 @@ export type CreateAppOptions = {
   };
 };
 
+function unconfiguredEventsClient(): EventsClient {
+  const fail = async () => {
+    throw new Error("Google events client not configured");
+  };
+  return {
+    createSubscription: fail,
+    renewSubscription: fail,
+    deleteSubscription: fail,
+    revokeToken: fail,
+  };
+}
+
+function bearerToken(req: Request): string {
+  const header = req.header("authorization") ?? "";
+  return header.startsWith("Bearer ") ? header.slice(7) : "";
+}
+
 export function createApp(options: CreateAppOptions): Express {
   const app = express();
   app.use(express.json({ limit: "1mb" }));
@@ -33,17 +50,7 @@ export function createApp(options: CreateAppOptions): Express {
     options.eventsClient ??
     (options.google
       ? createGoogleEventsClient(options.google)
-      : {
-          createSubscription: async () => {
-            throw new Error("Google events client not configured");
-          },
-          deleteSubscription: async () => {
-            throw new Error("Google events client not configured");
-          },
-          revokeToken: async () => {
-            throw new Error("Google events client not configured");
-          },
-        });
+      : unconfiguredEventsClient());
 
   const accounts = new AccountService({
     store: options.store,
@@ -79,9 +86,53 @@ export function createApp(options: CreateAppOptions): Express {
     }
   });
 
+  // User-scoped account lifecycle — authenticated by the caller's Google
+  // refresh token (never the shared ADMIN_TOKEN). Keep ADMIN_TOKEN server-side.
+  app.post("/accounts", async (req, res) => {
+    try {
+      const { accountId, email, label, refreshToken } = req.body ?? {};
+      if (!accountId || !email || !label || !refreshToken) {
+        res.status(400).json({ error: "missing_fields" });
+        return;
+      }
+      const account = await accounts.registerAccount({
+        accountId,
+        email,
+        label,
+        refreshToken,
+      });
+      res.status(201).json({
+        accountId: account.accountId,
+        subscriptionName: account.subscriptionName,
+      });
+    } catch (err) {
+      console.error("register account failed", err);
+      res.status(500).json({ error: "register_failed" });
+    }
+  });
+
+  app.delete("/accounts/:accountId", async (req, res) => {
+    try {
+      const accountId = decodeURIComponent(req.params.accountId);
+      const refreshToken = bearerToken(req) || (req.body?.refreshToken as string | undefined);
+      if (!refreshToken) {
+        res.status(401).json({ error: "unauthorized" });
+        return;
+      }
+      if (!accounts.ownsRefreshToken(accountId, refreshToken)) {
+        res.status(403).json({ error: "forbidden" });
+        return;
+      }
+      await accounts.removeAccount(accountId);
+      res.status(204).end();
+    } catch (err) {
+      console.error("remove account failed", err);
+      res.status(500).json({ error: "remove_failed" });
+    }
+  });
+
   app.use("/admin", (req, res, next) => {
-    const header = req.header("authorization") ?? "";
-    const token = header.startsWith("Bearer ") ? header.slice(7) : "";
+    const token = bearerToken(req);
     if (token !== options.adminToken) {
       res.status(401).json({ error: "unauthorized" });
       return;
@@ -90,27 +141,32 @@ export function createApp(options: CreateAppOptions): Express {
   });
 
   app.post("/admin/test-ntfy", async (req, res) => {
-    const {
-      accountLabel = "Test",
-      spaceTitle = "manual",
-      senderName = "Relay",
-      messageText = "test notification",
-    } = req.body ?? {};
+    try {
+      const {
+        accountLabel = "Test",
+        spaceTitle = "manual",
+        senderName = "Relay",
+        messageText = "test notification",
+      } = req.body ?? {};
 
-    const formatted = formatNtfyNotification({
-      accountLabel,
-      spaceTitle,
-      senderName,
-      messageText,
-    });
+      const formatted = formatNtfyNotification({
+        accountLabel,
+        spaceTitle,
+        senderName,
+        messageText,
+      });
 
-    await publisher.publish({
-      title: formatted.title,
-      body: formatted.body,
-      tags: ["white_check_mark"],
-    });
+      await publisher.publish({
+        title: formatted.title,
+        body: formatted.body,
+        tags: ["white_check_mark"],
+      });
 
-    res.status(200).json({ ok: true });
+      res.status(200).json({ ok: true });
+    } catch (err) {
+      console.error("test-ntfy publish failed", err);
+      res.status(502).json({ error: "publish_failed" });
+    }
   });
 
   app.get("/admin/accounts", (_req, res) => {
@@ -214,27 +270,32 @@ export function createApp(options: CreateAppOptions): Express {
   });
 
   app.post("/admin/renew-subscriptions", async (req, res) => {
-    const horizonHours =
-      typeof req.body?.horizonHours === "number" ? req.body.horizonHours : 24;
-    const result = await renewExpiringSubscriptions({
-      store: options.store,
-      events,
-      crypto,
-      horizonMs: horizonHours * 60 * 60 * 1000,
-      alertRenewFailure: async ({ accountId, error }) => {
-        console.error("subscription renew failed", accountId, error);
-        try {
-          await publisher.publish({
-            title: "[Relay] subscription renew failed",
-            body: `account ${accountId}: ${error instanceof Error ? error.message : "error"}`,
-            tags: ["warning"],
-          });
-        } catch (publishError) {
-          console.error("failed to alert renew failure", publishError);
-        }
-      },
-    });
-    res.status(200).json(result);
+    try {
+      const horizonHours =
+        typeof req.body?.horizonHours === "number" ? req.body.horizonHours : 24;
+      const result = await renewExpiringSubscriptions({
+        store: options.store,
+        events,
+        crypto,
+        horizonMs: horizonHours * 60 * 60 * 1000,
+        alertRenewFailure: async ({ accountId, error }) => {
+          console.error("subscription renew failed", accountId, error);
+          try {
+            await publisher.publish({
+              title: "[Relay] subscription renew failed",
+              body: `account ${accountId}: ${error instanceof Error ? error.message : "error"}`,
+              tags: ["warning"],
+            });
+          } catch (publishError) {
+            console.error("failed to alert renew failure", publishError);
+          }
+        },
+      });
+      res.status(200).json(result);
+    } catch (err) {
+      console.error("renew-subscriptions failed", err);
+      res.status(500).json({ error: "renew_failed" });
+    }
   });
 
   return app;

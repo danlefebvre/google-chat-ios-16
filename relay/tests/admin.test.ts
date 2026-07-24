@@ -11,6 +11,7 @@ describe("admin API", () => {
       adminToken: "admin-secret",
       eventsClient: {
         createSubscription: vi.fn(),
+        renewSubscription: vi.fn(),
         deleteSubscription: vi.fn(),
         revokeToken: vi.fn(),
       },
@@ -52,5 +53,70 @@ describe("admin API", () => {
     expect(init.body).toBe("Alice: deploy looks good");
 
     vi.unstubAllGlobals();
+  });
+
+  it("returns 502 when test-ntfy publish fails", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 503,
+      text: async () => "busy",
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const app = createApp({
+      store: new InMemoryStore(),
+      ntfy: {
+        baseUrl: "https://ntfy.sh",
+        topic: "t",
+        accessToken: "tk",
+      },
+      adminToken: "admin-secret",
+    });
+
+    const res = await request(app)
+      .post("/admin/test-ntfy")
+      .set("Authorization", "Bearer admin-secret")
+      .send({});
+
+    expect(res.status).toBe(502);
+    expect(res.body).toEqual({ error: "publish_failed" });
+    vi.unstubAllGlobals();
+  });
+
+  it("registers and removes accounts via user-scoped routes without admin token", async () => {
+    const events = {
+      createSubscription: vi.fn().mockResolvedValue({
+        name: "subscriptions/u1",
+        expireTime: "2026-08-01T00:00:00Z",
+      }),
+      renewSubscription: vi.fn(),
+      deleteSubscription: vi.fn().mockResolvedValue(undefined),
+      revokeToken: vi.fn().mockResolvedValue(undefined),
+    };
+    const app = createApp({
+      store: new InMemoryStore(),
+      ntfy: { baseUrl: "https://ntfy.sh", topic: "t", accessToken: "tk" },
+      adminToken: "admin-secret",
+      eventsClient: events,
+      tokenSecret: "test-token-secret-32chars!!",
+    });
+
+    const register = await request(app).post("/accounts").send({
+      accountId: "iss|sub",
+      email: "a@b.com",
+      label: "Work",
+      refreshToken: "rt-user",
+    });
+    expect(register.status).toBe(201);
+
+    const denied = await request(app)
+      .delete("/accounts/iss%7Csub")
+      .set("Authorization", "Bearer wrong");
+    expect(denied.status).toBe(403);
+
+    const removed = await request(app)
+      .delete("/accounts/iss%7Csub")
+      .set("Authorization", "Bearer rt-user");
+    expect(removed.status).toBe(204);
   });
 });

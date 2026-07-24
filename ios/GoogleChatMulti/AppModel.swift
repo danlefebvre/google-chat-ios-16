@@ -68,10 +68,45 @@ final class AppModel: ObservableObject {
         Task { await refresh() }
     }
 
-    func removeAccount(_ accountId: AccountID) async {
-        // Relay teardown should happen before local wipe (plan order).
-        await RelayAdminClient.shared?.removeAccount(accountId)
+    func markRelayRegistration(pending: Bool, for accountId: AccountID) {
+        guard var account = accounts.first(where: { $0.id == accountId }) else { return }
+        account.relayRegistrationPending = pending
+        let refresh = authStore.refreshToken(for: accountId) ?? ""
+        let access = authStore.accessToken(for: accountId) ?? ""
+        authStore.save(account: account, refreshToken: refresh, accessToken: access)
+        accounts = authStore.loadAccounts()
+    }
+
+    /// Removes the account from the relay first, then local credentials/cache.
+    /// Pass `localOnly: true` only for an explicitly labeled local wipe.
+    func removeAccount(_ accountId: AccountID, localOnly: Bool = false) async {
+        if !localOnly {
+            guard let client = RelayAdminClient.shared else {
+                banner = "Relay is not configured. Choose local-only removal to wipe this device."
+                errorMessage = "Relay not configured"
+                return
+            }
+            guard let refresh = authStore.refreshToken(for: accountId), !refresh.isEmpty else {
+                banner = "Missing refresh token; cannot tear down relay registration."
+                errorMessage = "Missing refresh token"
+                return
+            }
+            do {
+                try await client.removeAccount(accountId, refreshToken: refresh)
+            } catch {
+                banner = "Relay teardown failed; local account kept. Retry remove later."
+                errorMessage = error.localizedDescription
+                return
+            }
+        }
+
         authStore.remove(accountId: accountId)
+        do {
+            try await sync?.purgeAccount(accountId)
+        } catch {
+            // Best-effort cache purge; local credentials already removed.
+            errorMessage = error.localizedDescription
+        }
         accounts = authStore.loadAccounts()
         conversations = conversations.filter { $0.accountId != accountId }
     }

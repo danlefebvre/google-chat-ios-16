@@ -1,6 +1,9 @@
 import Foundation
 import GoogleChatMultiCore
 import Security
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 
 public protocol AccountAuthStore: AnyObject {
     func loadAccounts() -> [LinkedAccount]
@@ -8,6 +11,7 @@ public protocol AccountAuthStore: AnyObject {
     func remove(accountId: AccountID)
     func accessToken(for accountId: AccountID) -> String?
     func refreshToken(for accountId: AccountID) -> String?
+    func updateAccessToken(for accountId: AccountID, accessToken: String)
     func asTokenProvider() -> any TokenProviding
 }
 
@@ -60,6 +64,12 @@ public final class KeychainAccountAuthStore: AccountAuthStore {
         return String(data: data, encoding: .utf8)
     }
 
+    public func updateAccessToken(for accountId: AccountID, accessToken: String) {
+        if let accessData = accessToken.data(using: .utf8) {
+            write(key: tokenKey(accountId, kind: "access"), data: accessData)
+        }
+    }
+
     public func asTokenProvider() -> any TokenProviding {
         AuthTokenProvider(store: self)
     }
@@ -109,10 +119,51 @@ private struct AuthTokenProvider: TokenProviding {
     let store: AccountAuthStore
 
     func accessToken(for accountId: AccountID) async throws -> String {
-        if let token = store.accessToken(for: accountId) {
+        if let token = store.accessToken(for: accountId), !token.isEmpty {
             return token
         }
-        throw ChatAPIError.httpStatus(401)
+        guard let refresh = store.refreshToken(for: accountId), !refresh.isEmpty else {
+            throw ChatAPIError.httpStatus(401)
+        }
+        let refreshed = try await GoogleOAuthTokenRefresher.refresh(refreshToken: refresh)
+        store.updateAccessToken(for: accountId, accessToken: refreshed)
+        return refreshed
+    }
+}
+
+enum GoogleOAuthTokenRefresher {
+    static func refresh(refreshToken: String) async throws -> String {
+        guard
+            let clientID = Bundle.main.object(forInfoDictionaryKey: "GIDClientID") as? String,
+            !clientID.isEmpty
+        else {
+            throw ChatAPIError.httpStatus(401)
+        }
+
+        var request = URLRequest(url: URL(string: "https://oauth2.googleapis.com/token")!)
+        request.httpMethod = "POST"
+        request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
+        var components = URLComponents()
+        components.queryItems = [
+            URLQueryItem(name: "client_id", value: clientID),
+            URLQueryItem(name: "refresh_token", value: refreshToken),
+            URLQueryItem(name: "grant_type", value: "refresh_token"),
+        ]
+        request.httpBody = components.percentEncodedQuery?.data(using: .utf8)
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        let status = (response as? HTTPURLResponse)?.statusCode ?? -1
+        guard (200..<300).contains(status) else {
+            throw ChatAPIError.httpStatus(status)
+        }
+        guard
+            let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+            let access = json["access_token"] as? String,
+            !access.isEmpty
+        else {
+            throw ChatAPIError.decodingFailed
+        }
+        return access
     }
 }
 
@@ -145,6 +196,10 @@ public final class InMemoryAccountAuthStore: AccountAuthStore {
 
     public func refreshToken(for accountId: AccountID) -> String? {
         refresh[accountId.rawValue]
+    }
+
+    public func updateAccessToken(for accountId: AccountID, accessToken: String) {
+        access[accountId.rawValue] = accessToken
     }
 
     public func asTokenProvider() -> any TokenProviding {

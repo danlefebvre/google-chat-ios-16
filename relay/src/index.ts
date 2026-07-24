@@ -1,10 +1,13 @@
 import { createApp } from "./app.js";
 import { loadConfig } from "./config.js";
-import { InMemoryStore } from "./store.js";
+import { FileAccountStore } from "./store.js";
 
 async function main(): Promise<void> {
   const config = loadConfig();
-  const store = new InMemoryStore();
+  // File-backed so linked accounts / subscriptions survive restarts.
+  // For multi-replica production, point ACCOUNT_STORE_PATH at a shared volume
+  // or swap this for Firestore/SQLite.
+  const store = new FileAccountStore(config.accountStorePath);
   if (config.quietHours) {
     store.setQuietHours(config.quietHours);
   }

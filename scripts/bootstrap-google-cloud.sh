@@ -22,7 +22,11 @@ gcloud services enable \
   people.googleapis.com
 
 TOPIC="chat-events"
-gcloud pubsub topics create "${TOPIC}" --quiet || true
+if ! gcloud pubsub topics describe "${TOPIC}" \
+  --project="${PROJECT_ID}" >/dev/null 2>&1; then
+  gcloud pubsub topics create "${TOPIC}" \
+    --project="${PROJECT_ID}" --quiet
+fi
 
 echo
 echo "Next manual steps in Google Cloud Console:"

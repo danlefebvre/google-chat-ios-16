@@ -3,7 +3,7 @@ import { renewExpiringSubscriptions } from "../src/renewal.js";
 import { InMemoryStore } from "../src/store.js";
 
 describe("renewExpiringSubscriptions", () => {
-  it("renews subscriptions expiring within the horizon", async () => {
+  it("renews subscriptions expiring within the horizon via patch", async () => {
     const store = new InMemoryStore();
     store.upsertAccount({
       accountId: "iss|a",
@@ -33,11 +33,12 @@ describe("renewExpiringSubscriptions", () => {
     });
 
     const events = {
-      createSubscription: vi.fn().mockResolvedValue({
-        name: "subscriptions/new",
-        expireTime: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+      createSubscription: vi.fn(),
+      renewSubscription: vi.fn().mockResolvedValue({
+        name: "subscriptions/old",
+        expireTime: new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString(),
       }),
-      deleteSubscription: vi.fn().mockResolvedValue(undefined),
+      deleteSubscription: vi.fn(),
       revokeToken: vi.fn(),
     };
     const crypto = {
@@ -56,9 +57,12 @@ describe("renewExpiringSubscriptions", () => {
 
     expect(result.renewed).toEqual(["iss|a"]);
     expect(result.skipped).toEqual(["iss|b"]);
-    expect(events.deleteSubscription).toHaveBeenCalledWith("subscriptions/old");
-    expect(events.createSubscription).toHaveBeenCalledOnce();
-    expect(store.getAccount("iss|a")?.subscriptionName).toBe("subscriptions/new");
+    expect(events.deleteSubscription).not.toHaveBeenCalled();
+    expect(events.renewSubscription).toHaveBeenCalledWith({
+      subscriptionName: "subscriptions/old",
+      refreshToken: "rt",
+    });
+    expect(store.getAccount("iss|a")?.subscriptionName).toBe("subscriptions/old");
     expect(alert).not.toHaveBeenCalled();
   });
 
@@ -78,8 +82,9 @@ describe("renewExpiringSubscriptions", () => {
     });
 
     const events = {
-      createSubscription: vi.fn().mockRejectedValue(new Error("boom")),
-      deleteSubscription: vi.fn().mockResolvedValue(undefined),
+      createSubscription: vi.fn(),
+      renewSubscription: vi.fn().mockRejectedValue(new Error("boom")),
+      deleteSubscription: vi.fn(),
       revokeToken: vi.fn(),
     };
     const alert = vi.fn();

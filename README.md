@@ -70,6 +70,8 @@ swift test
 ./scripts/run-tests.sh
 ```
 
+If Swift is unavailable (e.g. Linux CI without a toolchain), set `SKIP_SWIFT_TESTS=1` to opt in to skipping Core tests. Without that flag the script fails instead of reporting a full-suite pass.
+
 ### Phase 0 helpers
 
 ```bash

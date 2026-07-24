@@ -20,16 +20,15 @@ describe("POST /admin/renew-subscriptions", () => {
     });
 
     const events = {
-      createSubscription: vi.fn().mockResolvedValue({
-        name: "subscriptions/new",
-        expireTime: new Date(Date.now() + 7 * 86400000).toISOString(),
+      createSubscription: vi.fn(),
+      renewSubscription: vi.fn().mockResolvedValue({
+        name: "subscriptions/old",
+        expireTime: new Date(Date.now() + 4 * 3600000).toISOString(),
       }),
       deleteSubscription: vi.fn().mockResolvedValue(undefined),
       revokeToken: vi.fn(),
     };
 
-    // Use a crypto that treats the stored token as already-plain for this route test
-    // by injecting via register path instead — here we stub decrypt via fake cipher format.
     const app = createApp({
       store,
       ntfy: { baseUrl: "https://ntfy.sh", topic: "t", accessToken: "tk" },
@@ -38,7 +37,6 @@ describe("POST /admin/renew-subscriptions", () => {
       eventsClient: events,
     });
 
-    // Replace encrypted token with a real encrypted value
     const { createTokenCrypto } = await import("../src/crypto.js");
     const crypto = createTokenCrypto("unit-test-secret-value");
     const existing = store.getAccount("iss|a")!;
@@ -54,6 +52,7 @@ describe("POST /admin/renew-subscriptions", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.renewed).toEqual(["iss|a"]);
-    expect(events.createSubscription).toHaveBeenCalledOnce();
+    expect(events.renewSubscription).toHaveBeenCalledOnce();
+    expect(events.createSubscription).not.toHaveBeenCalled();
   });
 });

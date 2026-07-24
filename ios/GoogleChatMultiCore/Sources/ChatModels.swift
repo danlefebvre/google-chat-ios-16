@@ -3,7 +3,17 @@ import Foundation
 public extension JSONDecoder {
     static let chat: JSONDecoder = {
         let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
+        decoder.dateDecodingStrategy = .custom { decoder in
+            let container = try decoder.singleValueContainer()
+            let raw = try container.decode(String.self)
+            if let date = RFC3339Date.parse(raw) {
+                return date
+            }
+            throw DecodingError.dataCorruptedError(
+                in: container,
+                debugDescription: "Invalid RFC3339 date: \(raw)"
+            )
+        }
         return decoder
     }()
 }
@@ -14,6 +24,24 @@ public extension JSONEncoder {
         encoder.dateEncodingStrategy = .iso8601
         return encoder
     }()
+}
+
+enum RFC3339Date {
+    private static let fractional: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter
+    }()
+
+    private static let wholeSeconds: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
+        return formatter
+    }()
+
+    static func parse(_ raw: String) -> Date? {
+        fractional.date(from: raw) ?? wholeSeconds.date(from: raw)
+    }
 }
 
 public struct SpaceListResponse: Codable, Sendable {
@@ -127,6 +155,29 @@ public struct ChatAttachment: Codable, Hashable, Sendable {
     }
 }
 
+/// Response from Chat media upload — use `attachmentUploadToken` when creating a message.
+public struct AttachmentUploadResponse: Codable, Hashable, Sendable {
+    public var attachmentDataRef: AttachmentDataRef?
+
+    public init(attachmentDataRef: AttachmentDataRef? = nil) {
+        self.attachmentDataRef = attachmentDataRef
+    }
+
+    public var attachmentUploadToken: String? {
+        attachmentDataRef?.attachmentUploadToken
+    }
+}
+
+public struct AttachmentDataRef: Codable, Hashable, Sendable {
+    public var resourceName: String?
+    public var attachmentUploadToken: String?
+
+    public init(resourceName: String? = nil, attachmentUploadToken: String? = nil) {
+        self.resourceName = resourceName
+        self.attachmentUploadToken = attachmentUploadToken
+    }
+}
+
 public struct EmojiReactionSummary: Codable, Hashable, Sendable {
     public var emoji: ChatEmoji?
     public var reactionCount: Int?
@@ -147,9 +198,19 @@ public struct ChatEmoji: Codable, Hashable, Sendable {
 
 public struct CreateMessageRequest: Codable, Sendable {
     public var text: String
+    public var attachment: [CreateMessageAttachment]?
 
-    public init(text: String) {
+    public init(text: String, attachment: [CreateMessageAttachment]? = nil) {
         self.text = text
+        self.attachment = attachment
+    }
+}
+
+public struct CreateMessageAttachment: Codable, Sendable {
+    public var attachmentDataRef: AttachmentDataRef
+
+    public init(uploadToken: String) {
+        self.attachmentDataRef = AttachmentDataRef(attachmentUploadToken: uploadToken)
     }
 }
 

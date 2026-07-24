@@ -35,12 +35,24 @@ export type ParsedChatEvent = {
   eventType: "message.created";
 };
 
+export type SubscriptionHandle = {
+  name: string;
+  expireTime: string;
+};
+
 export type EventsClient = {
   createSubscription: (input: {
     accountId: string;
     refreshToken: string;
-  }) => Promise<{ name: string; expireTime: string }>;
-  deleteSubscription: (subscriptionName: string) => Promise<void>;
+  }) => Promise<SubscriptionHandle>;
+  renewSubscription: (input: {
+    subscriptionName: string;
+    refreshToken: string;
+  }) => Promise<SubscriptionHandle>;
+  deleteSubscription: (input: {
+    subscriptionName: string;
+    refreshToken: string;
+  }) => Promise<void>;
   revokeToken: (refreshToken: string) => Promise<void>;
 };
 

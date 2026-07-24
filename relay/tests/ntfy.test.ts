@@ -76,6 +76,7 @@ describe("NtfyPublisher", () => {
     expect(init.headers["Tags"]).toBe("speech_balloon");
     expect(init.headers["Click"]).toBe("googlechatmulti://space/spaces/AAA");
     expect(init.body).toBe("Alice: deploy looks good");
+    expect(init.signal).toBeInstanceOf(AbortSignal);
   });
 
   it("retries failed deliveries then throws", async () => {

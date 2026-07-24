@@ -1,8 +1,10 @@
 import Foundation
 
 public protocol ConversationCaching: AnyObject, Sendable {
-    func upsertConversations(_ rows: [ConversationSummary]) async throws
+    /// Replace the authoritative snapshot for a refresh (stale rows must not linger).
+    func replaceConversations(_ rows: [ConversationSummary]) async throws
     func loadConversations() async throws -> [ConversationSummary]
+    func deleteConversations(accountId: AccountID) async throws
 }
 
 public actor InboxSyncService {
@@ -18,8 +20,8 @@ public actor InboxSyncService {
         var merged: [ConversationSummary] = []
 
         for account in accounts {
-            let response = try await api.listSpaces(accountId: account.id)
-            for space in response.spaces {
+            let spaces = try await listAllSpaces(accountId: account.id)
+            for space in spaces {
                 let preview: String
                 let activity: Date
                 if let messages = try? await api.listMessages(
@@ -55,12 +57,27 @@ public actor InboxSyncService {
         }
 
         let sorted = InboxMerger.merge(merged)
-        try await cache.upsertConversations(sorted)
+        try await cache.replaceConversations(sorted)
         return sorted
     }
 
     public func cachedInbox() async throws -> [ConversationSummary] {
         InboxMerger.merge(try await cache.loadConversations())
+    }
+
+    public func purgeAccount(_ accountId: AccountID) async throws {
+        try await cache.deleteConversations(accountId: accountId)
+    }
+
+    private func listAllSpaces(accountId: AccountID) async throws -> [ChatSpace] {
+        var spaces: [ChatSpace] = []
+        var pageToken: String? = nil
+        repeat {
+            let response = try await api.listSpaces(accountId: accountId, pageToken: pageToken)
+            spaces.append(contentsOf: response.spaces)
+            pageToken = response.nextPageToken
+        } while pageToken != nil && !(pageToken?.isEmpty ?? true)
+        return spaces
     }
 }
 
@@ -70,15 +87,15 @@ public actor InMemoryConversationCache: ConversationCaching {
 
     public init() {}
 
-    public func upsertConversations(_ rows: [ConversationSummary]) async throws {
-        var map = Dictionary(uniqueKeysWithValues: self.rows.map { ($0.compositeId, $0) })
-        for row in rows {
-            map[row.compositeId] = row
-        }
-        self.rows = Array(map.values)
+    public func replaceConversations(_ rows: [ConversationSummary]) async throws {
+        self.rows = rows
     }
 
     public func loadConversations() async throws -> [ConversationSummary] {
         rows
+    }
+
+    public func deleteConversations(accountId: AccountID) async throws {
+        rows.removeAll { $0.accountId == accountId }
     }
 }

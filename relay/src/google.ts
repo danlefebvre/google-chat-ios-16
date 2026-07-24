@@ -1,4 +1,4 @@
-import type { EventsClient } from "./types.js";
+import type { EventsClient, SubscriptionHandle } from "./types.js";
 
 export type GoogleEventsClientOptions = {
   projectId: string;
@@ -7,6 +7,9 @@ export type GoogleEventsClientOptions = {
   oauthClientSecret: string;
   fetchImpl?: typeof fetch;
 };
+
+/** Workspace Events max lifetime with includeResource (no DWD) is ~4 hours. */
+const SUBSCRIPTION_TTL_SECONDS = 4 * 60 * 60;
 
 /**
  * Thin Google Workspace Events + OAuth revoke client.
@@ -19,15 +22,15 @@ export function createGoogleEventsClient(
 
   return {
     async createSubscription(input) {
-      // Exchange refresh token for access token, then create subscription.
       const accessToken = await refreshAccessToken(fetchImpl, {
         clientId: options.oauthClientId,
         clientSecret: options.oauthClientSecret,
         refreshToken: input.refreshToken,
       });
 
-      const expireTime = new Date(
-        Date.now() + 7 * 24 * 60 * 60 * 1000,
+      const ttl = `${SUBSCRIPTION_TTL_SECONDS}s`;
+      const fallbackExpire = new Date(
+        Date.now() + SUBSCRIPTION_TTL_SECONDS * 1000,
       ).toISOString();
 
       const response = await fetchImpl(
@@ -39,22 +42,16 @@ export function createGoogleEventsClient(
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            targetResource: "//cloudresourcemanager.googleapis.com/projects/" +
-              options.projectId,
-            eventTypes: [
-              "google.workspace.chat.message.v1.created",
-            ],
+            // Chat user-scoped target (all spaces the caller can access).
+            targetResource: "//chat.googleapis.com/spaces/-",
+            eventTypes: ["google.workspace.chat.message.v1.created"],
             notificationEndpoint: {
               pubsubTopic: options.pubsubTopic,
             },
             payloadOptions: {
               includeResource: true,
             },
-            expireTime,
-            // Custom attribute so Pub/Sub push can map events → account
-            labels: {
-              accountId: sanitizeLabel(input.accountId),
-            },
+            ttl,
           }),
         },
       );
@@ -66,23 +63,77 @@ export function createGoogleEventsClient(
         );
       }
 
-      const body = (await response.json()) as {
-        name?: string;
-        expireTime?: string;
-      };
+      const subscription = await resolveSubscriptionOperation(
+        fetchImpl,
+        accessToken,
+        await response.json(),
+      );
 
       return {
-        name: body.name ?? `subscriptions/${sanitizeLabel(input.accountId)}`,
-        expireTime: body.expireTime ?? expireTime,
+        name:
+          subscription.name ??
+          `subscriptions/${sanitizeLabel(input.accountId)}`,
+        expireTime: subscription.expireTime ?? fallbackExpire,
       };
     },
 
-    async deleteSubscription(subscriptionName) {
-      // Deletion requires an access token; callers should pass a valid one via
-      // a richer client in production. For MVP scaffold we best-effort DELETE.
+    async renewSubscription(input) {
+      const accessToken = await refreshAccessToken(fetchImpl, {
+        clientId: options.oauthClientId,
+        clientSecret: options.oauthClientSecret,
+        refreshToken: input.refreshToken,
+      });
+
+      const expireTime = new Date(
+        Date.now() + SUBSCRIPTION_TTL_SECONDS * 1000,
+      ).toISOString();
+
       const response = await fetchImpl(
-        `https://workspaceevents.googleapis.com/v1/${subscriptionName}`,
-        { method: "DELETE" },
+        `https://workspaceevents.googleapis.com/v1/${input.subscriptionName}?updateMask=expireTime`,
+        {
+          method: "PATCH",
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ expireTime }),
+        },
+      );
+
+      if (!response.ok) {
+        const detail = await response.text();
+        throw new Error(
+          `renewSubscription failed (${response.status}): ${detail}`,
+        );
+      }
+
+      const subscription = await resolveSubscriptionOperation(
+        fetchImpl,
+        accessToken,
+        await response.json(),
+      );
+
+      return {
+        name: subscription.name ?? input.subscriptionName,
+        expireTime: subscription.expireTime ?? expireTime,
+      };
+    },
+
+    async deleteSubscription(input) {
+      const accessToken = await refreshAccessToken(fetchImpl, {
+        clientId: options.oauthClientId,
+        clientSecret: options.oauthClientSecret,
+        refreshToken: input.refreshToken,
+      });
+
+      const response = await fetchImpl(
+        `https://workspaceevents.googleapis.com/v1/${input.subscriptionName}`,
+        {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+        },
       );
       if (!response.ok && response.status !== 404) {
         const detail = await response.text();
@@ -109,6 +160,91 @@ export function createGoogleEventsClient(
       }
     },
   };
+}
+
+type OperationBody = {
+  name?: string;
+  done?: boolean;
+  response?: {
+    name?: string;
+    expireTime?: string;
+  };
+  error?: { message?: string };
+};
+
+async function resolveSubscriptionOperation(
+  fetchImpl: typeof fetch,
+  accessToken: string,
+  body: unknown,
+): Promise<Partial<SubscriptionHandle>> {
+  const operation = body as OperationBody;
+
+  // Direct Subscription JSON (some clients/mocks) — treat as resolved.
+  if (operation.response?.name || (operation.name?.startsWith("subscriptions/") && operation.done !== false && !operation.name?.startsWith("operations/"))) {
+    if (operation.response) {
+      return {
+        name: operation.response.name,
+        expireTime: operation.response.expireTime,
+      };
+    }
+    if (operation.name?.startsWith("subscriptions/")) {
+      return {
+        name: operation.name,
+        expireTime: (body as { expireTime?: string }).expireTime,
+      };
+    }
+  }
+
+  if (operation.error?.message) {
+    throw new Error(`subscription operation failed: ${operation.error.message}`);
+  }
+
+  if (operation.done && operation.response) {
+    return {
+      name: operation.response.name,
+      expireTime: operation.response.expireTime,
+    };
+  }
+
+  if (operation.name?.startsWith("operations/")) {
+    return pollOperation(fetchImpl, accessToken, operation.name);
+  }
+
+  // Fallback: body itself looks like a Subscription.
+  const direct = body as { name?: string; expireTime?: string };
+  return { name: direct.name, expireTime: direct.expireTime };
+}
+
+async function pollOperation(
+  fetchImpl: typeof fetch,
+  accessToken: string,
+  operationName: string,
+  attempts = 10,
+): Promise<Partial<SubscriptionHandle>> {
+  for (let i = 0; i < attempts; i += 1) {
+    const response = await fetchImpl(
+      `https://workspaceevents.googleapis.com/v1/${operationName}`,
+      {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      },
+    );
+    if (!response.ok) {
+      const detail = await response.text();
+      throw new Error(`operations.get failed (${response.status}): ${detail}`);
+    }
+    const body = (await response.json()) as OperationBody;
+    if (body.error?.message) {
+      throw new Error(`subscription operation failed: ${body.error.message}`);
+    }
+    if (body.done) {
+      return {
+        name: body.response?.name,
+        expireTime: body.response?.expireTime,
+      };
+    }
+    await sleep(250);
+  }
+  throw new Error(`subscription operation timed out: ${operationName}`);
 }
 
 async function refreshAccessToken(
@@ -140,4 +276,8 @@ async function refreshAccessToken(
 
 function sanitizeLabel(value: string): string {
   return value.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 63);
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }

@@ -87,16 +87,15 @@ public actor ChatAPIClient {
         )
     }
 
-    /// Upload media bytes then attach via a follow-up message (Chat media API).
+    /// Upload media bytes via the Chat upload endpoint; returns an upload token
+    /// for `CreateMessageRequest.attachment`.
     public func uploadAttachment(
         accountId: AccountID,
         spaceName: String,
         filename: String,
         mimeType: String,
         data: Data
-    ) async throws -> ChatAttachment {
-        // Google Chat media upload uses multipart / upload endpoints; keep a
-        // thin wrapper so the UI can call one method with memory-limited data.
+    ) async throws -> AttachmentUploadResponse {
         let boundary = "gcm-\(UUID().uuidString)"
         var body = Data()
         func append(_ string: String) {
@@ -105,16 +104,16 @@ public actor ChatAPIClient {
         append("--\(boundary)\r\n")
         append("Content-Disposition: form-data; name=\"metadata\"\r\n")
         append("Content-Type: application/json; charset=UTF-8\r\n\r\n")
-        append("{\"filename\":\(jsonString(filename)),\"mimeType\":\(jsonString(mimeType))}\r\n")
+        append("{\"filename\":\(jsonString(filename))}\r\n")
         append("--\(boundary)\r\n")
         append("Content-Disposition: form-data; name=\"media\"; filename=\"\(filename)\"\r\n")
         append("Content-Type: \(mimeType)\r\n\r\n")
         body.append(data)
         append("\r\n--\(boundary)--\r\n")
 
+        // Chat media upload host: https://chat.googleapis.com/upload/v1/{parent}/attachments
         var components = URLComponents(
-            url: baseURL.appendingPathComponent("media/\(spaceName)/attachments"),
-            resolvingAgainstBaseURL: false
+            string: "https://chat.googleapis.com/upload/v1/\(spaceName)/attachments"
         )!
         components.queryItems = [URLQueryItem(name: "uploadType", value: "multipart")]
         guard let url = components.url else { throw ChatAPIError.invalidURL }

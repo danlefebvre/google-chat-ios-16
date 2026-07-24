@@ -52,4 +52,22 @@ final class ChatModelsTests: XCTestCase {
         XCTAssertEqual(response.messages[0].sender?.displayName, "Alice")
         XCTAssertEqual(response.messages[0].emojiReactionSummaries?.first?.reactionCount, 2)
     }
+
+    func testDecodesFractionalRFC3339Timestamps() throws {
+        let json = """
+        {
+          "spaces": [
+            {
+              "name": "spaces/AAA",
+              "displayName": "#eng",
+              "spaceType": "SPACE",
+              "lastActiveTime": "2026-07-24T12:00:00.123456789Z"
+            }
+          ]
+        }
+        """.data(using: .utf8)!
+
+        let response = try JSONDecoder.chat.decode(SpaceListResponse.self, from: json)
+        XCTAssertNotNil(response.spaces[0].lastActiveTime)
+    }
 }

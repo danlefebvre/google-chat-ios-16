@@ -16,6 +16,8 @@ const envSchema = z.object({
   QUIET_HOURS_START: z.coerce.number().min(0).max(23).optional(),
   QUIET_HOURS_END: z.coerce.number().min(0).max(23).optional(),
   QUIET_HOURS_TZ: z.string().default("UTC"),
+  /** JSON file path for durable account storage (survives restarts). */
+  ACCOUNT_STORE_PATH: z.string().default("data/accounts.json"),
 });
 
 export type AppConfig = {
@@ -24,6 +26,7 @@ export type AppConfig = {
   tokenSecret: string;
   ntfy: NtfyConfig;
   deepLinkScheme: string;
+  accountStorePath: string;
   google?: {
     projectId: string;
     pubsubTopic: string;
@@ -60,6 +63,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     port: parsed.PORT,
     adminToken: parsed.ADMIN_TOKEN,
     tokenSecret: parsed.RELAY_TOKEN_SECRET,
+    accountStorePath: parsed.ACCOUNT_STORE_PATH,
     ntfy: {
       baseUrl: parsed.NTFY_BASE_URL,
       topic: parsed.NTFY_TOPIC,

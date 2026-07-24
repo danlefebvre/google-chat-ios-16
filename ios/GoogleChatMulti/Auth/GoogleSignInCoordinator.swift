@@ -38,13 +38,16 @@ final class GoogleSignInCoordinator: ObservableObject {
 
     func startSignIn(completion: @escaping (Result<GoogleAuthPayload, Error>) -> Void) {
         isBusy = true
-        defer { isBusy = false }
+        let finish: (Result<GoogleAuthPayload, Error>) -> Void = { [weak self] result in
+            self?.isBusy = false
+            completion(result)
+        }
 
         #if canImport(GoogleSignIn)
         guard let clientID = Bundle.main.object(forInfoDictionaryKey: "GIDClientID") as? String,
               !clientID.isEmpty
         else {
-            completion(.failure(GoogleSignInError.notConfigured))
+            finish(.failure(GoogleSignInError.notConfigured))
             return
         }
 
@@ -57,7 +60,7 @@ final class GoogleSignInCoordinator: ObservableObject {
             .first(where: \.isKeyWindow)?
             .rootViewController
         else {
-            completion(.failure(GoogleSignInError.notConfigured))
+            finish(.failure(GoogleSignInError.notConfigured))
             return
         }
 
@@ -72,14 +75,14 @@ final class GoogleSignInCoordinator: ObservableObject {
 
         GIDSignIn.sharedInstance.signIn(withPresenting: root, hint: nil, additionalScopes: scopes) { result, error in
             if let error {
-                completion(.failure(error))
+                finish(.failure(error))
                 return
             }
             guard let user = result?.user,
                   let profile = user.profile,
                   let idToken = user.idToken?.tokenString
             else {
-                completion(.failure(GoogleSignInError.missingTokens))
+                finish(.failure(GoogleSignInError.missingTokens))
                 return
             }
 
@@ -89,10 +92,10 @@ final class GoogleSignInCoordinator: ObservableObject {
             let access = user.accessToken.tokenString
             let refresh = user.refreshToken.tokenString
             guard !access.isEmpty else {
-                completion(.failure(GoogleSignInError.missingTokens))
+                finish(.failure(GoogleSignInError.missingTokens))
                 return
             }
-            completion(
+            finish(
                 .success(
                     GoogleAuthPayload(
                         accountId: accountId,
@@ -108,7 +111,7 @@ final class GoogleSignInCoordinator: ObservableObject {
         // Deterministic stub so UI/account manager can be exercised without the SDK.
         let index = Int.random(in: 1...999)
         let accountId = AccountID(issuer: "https://accounts.google.com", subject: "stub-\(index)")
-        completion(
+        finish(
             .success(
                 GoogleAuthPayload(
                     accountId: accountId,
@@ -119,7 +122,7 @@ final class GoogleSignInCoordinator: ObservableObject {
             )
         )
         #else
-        completion(.failure(GoogleSignInError.notConfigured))
+        finish(.failure(GoogleSignInError.notConfigured))
         #endif
         #endif
     }

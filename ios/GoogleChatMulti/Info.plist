@@ -43,8 +43,6 @@
 	<string>REPLACE_WITH_GOOGLE_CLIENT_ID.apps.googleusercontent.com</string>
 	<key>RELAY_BASE_URL</key>
 	<string>https://YOUR_RELAY_HOST</string>
-	<key>RELAY_ADMIN_TOKEN</key>
-	<string>REPLACE_ME</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>UIApplicationSceneManifest</key>

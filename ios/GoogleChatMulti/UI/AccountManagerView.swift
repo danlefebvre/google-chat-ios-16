@@ -22,8 +22,19 @@ struct AccountManagerView: View {
                             Text(account.email)
                                 .font(.caption)
                                 .foregroundStyle(Color("SecondaryText"))
+                            if account.relayRegistrationPending {
+                                Text("Relay registration pending — notifications offline")
+                                    .font(.caption2)
+                                    .foregroundStyle(.orange)
+                            }
                         }
                         Spacer()
+                        if account.relayRegistrationPending {
+                            Button("Retry relay") {
+                                Task { await retryRelayRegistration(account) }
+                            }
+                            .font(.caption)
+                        }
                     }
                     .swipeActions {
                         Button(role: .destructive) {
@@ -31,6 +42,12 @@ struct AccountManagerView: View {
                         } label: {
                             Label("Remove", systemImage: "trash")
                         }
+                        Button {
+                            Task { await model.removeAccount(account.id, localOnly: true) }
+                        } label: {
+                            Label("Local only", systemImage: "iphone.slash")
+                        }
+                        .tint(.gray)
                     }
                 }
             }
@@ -46,7 +63,8 @@ struct AccountManagerView: View {
                                 id: payload.accountId,
                                 email: payload.email,
                                 label: label,
-                                colorHex: color
+                                colorHex: color,
+                                relayRegistrationPending: true
                             )
                             model.addAccount(
                                 account,
@@ -54,10 +72,7 @@ struct AccountManagerView: View {
                                 accessToken: payload.accessToken
                             )
                             Task {
-                                try? await RelayAdminClient.shared?.registerAccount(
-                                    account: account,
-                                    refreshToken: payload.refreshToken
-                                )
+                                await registerWithRelay(account, refreshToken: payload.refreshToken)
                             }
                         case let .failure(error):
                             model.banner = error.localizedDescription
@@ -73,13 +88,36 @@ struct AccountManagerView: View {
             }
 
             Section("Notes") {
-                Text("OAuth uses GoogleSignIn UI + Keychain multi-account storage keyed by issuer/sub. Work accounts may need Workspace admin allowlisting.")
+                Text("OAuth uses GoogleSignIn UI + Keychain multi-account storage keyed by issuer/sub. Work accounts may need Workspace admin allowlisting. Relay registration uses your Google refresh token (admin token stays on the server).")
                     .font(.footnote)
                     .foregroundStyle(Color("SecondaryText"))
             }
         }
         .navigationTitle("Accounts")
         .background(Color("CanvasBackground"))
+    }
+
+    private func registerWithRelay(_ account: LinkedAccount, refreshToken: String) async {
+        guard let client = RelayAdminClient.shared else {
+            model.markRelayRegistration(pending: true, for: account.id)
+            model.banner = "Account saved locally; relay not configured (notifications unavailable)."
+            return
+        }
+        do {
+            try await client.registerAccount(account: account, refreshToken: refreshToken)
+            model.markRelayRegistration(pending: false, for: account.id)
+        } catch {
+            model.markRelayRegistration(pending: true, for: account.id)
+            model.banner = "Relay registration failed: \(error.localizedDescription). Retry from Accounts."
+        }
+    }
+
+    private func retryRelayRegistration(_ account: LinkedAccount) async {
+        guard let refresh = model.authStore.refreshToken(for: account.id), !refresh.isEmpty else {
+            model.banner = "Missing refresh token for relay registration."
+            return
+        }
+        await registerWithRelay(account, refreshToken: refresh)
     }
 
     private func suggestedLabel(for email: String, index: Int) -> String {

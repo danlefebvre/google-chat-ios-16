@@ -36,10 +36,11 @@ export async function renewExpiringSubscriptions(deps: {
     }
 
     try {
-      await deps.events.deleteSubscription(account.subscriptionName);
       const refreshToken = deps.crypto.decrypt(account.encryptedRefreshToken);
-      const next = await deps.events.createSubscription({
-        accountId: account.accountId,
+      // Patch in place — Workspace Events allows only one active subscription
+      // per resource; delete/recreate can leave the account unsubscribed.
+      const next = await deps.events.renewSubscription({
+        subscriptionName: account.subscriptionName,
         refreshToken,
       });
       deps.store.upsertAccount({

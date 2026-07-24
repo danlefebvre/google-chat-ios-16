@@ -17,7 +17,7 @@ Notifications are **not** delivered via APNs. Install the separate **ntfy** app 
 3. Edit `GoogleChatMulti/Info.plist`:
    - `GIDClientID` — Google iOS OAuth client
    - URL scheme `com.googleusercontent.apps.…` for Google Sign-In
-   - `RELAY_BASE_URL` / `RELAY_ADMIN_TOKEN`
+   - `RELAY_BASE_URL` (relay admin token stays server-side; the app uses user refresh tokens for `/accounts`)
 4. Add the **GoogleSignIn** SPM package (`https://github.com/google/GoogleSignIn-iOS`) to the app target when building on a Mac.
 
 ## Tests

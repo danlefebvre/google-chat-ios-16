@@ -3,6 +3,7 @@ export type NtfyPublishInput = {
   body: string;
   tags?: string[];
   clickUrl?: string;
+  timeoutMs?: number;
 };
 
 export type FormatNotificationInput = {
@@ -42,6 +43,7 @@ export type NtfyPublisherOptions = {
   accessToken: string;
   maxRetries?: number;
   retryDelayMs?: number;
+  requestTimeoutMs?: number;
   fetchImpl?: typeof fetch;
 };
 
@@ -51,6 +53,7 @@ export class NtfyPublisher {
   private readonly accessToken: string;
   private readonly maxRetries: number;
   private readonly retryDelayMs: number;
+  private readonly requestTimeoutMs: number;
   private readonly fetchImpl: typeof fetch;
 
   constructor(options: NtfyPublisherOptions) {
@@ -59,6 +62,7 @@ export class NtfyPublisher {
     this.accessToken = options.accessToken;
     this.maxRetries = options.maxRetries ?? 2;
     this.retryDelayMs = options.retryDelayMs ?? 250;
+    this.requestTimeoutMs = options.requestTimeoutMs ?? 10_000;
     this.fetchImpl = options.fetchImpl ?? fetch;
   }
 
@@ -66,8 +70,11 @@ export class NtfyPublisher {
     const url = `${this.baseUrl}/${this.topic}`;
     let attempt = 0;
     let lastError: Error | undefined;
+    const timeoutMs = input.timeoutMs ?? this.requestTimeoutMs;
 
     while (attempt <= this.maxRetries) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
       try {
         const response = await this.fetchImpl(url, {
           method: "POST",
@@ -78,6 +85,7 @@ export class NtfyPublisher {
             ...(input.clickUrl ? { Click: input.clickUrl } : {}),
           },
           body: input.body,
+          signal: controller.signal,
         });
 
         if (response.ok) {
@@ -91,6 +99,8 @@ export class NtfyPublisher {
       } catch (err) {
         lastError =
           err instanceof Error ? err : new Error("ntfy publish failed");
+      } finally {
+        clearTimeout(timer);
       }
 
       attempt += 1;

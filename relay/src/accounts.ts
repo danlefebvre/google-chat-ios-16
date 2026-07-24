@@ -24,6 +24,19 @@ export class AccountService {
   }
 
   async registerAccount(input: RegisterAccountInput): Promise<AccountRecord> {
+    const existing = this.store.getAccount(input.accountId);
+    if (existing?.subscriptionName) {
+      // Re-register must not orphan the previous Google subscription.
+      const refreshForDelete =
+        existing.encryptedRefreshToken.length > 0
+          ? this.crypto.decrypt(existing.encryptedRefreshToken)
+          : input.refreshToken;
+      await this.events.deleteSubscription({
+        subscriptionName: existing.subscriptionName,
+        refreshToken: refreshForDelete,
+      });
+    }
+
     const subscription = await this.events.createSubscription({
       accountId: input.accountId,
       refreshToken: input.refreshToken,
@@ -39,7 +52,7 @@ export class AccountService {
       ntfyBindingActive: true,
       muted: false,
       mutedSpaces: [],
-      createdAt: new Date().toISOString(),
+      createdAt: existing?.createdAt ?? new Date().toISOString(),
     };
 
     this.store.upsertAccount(account);
@@ -49,6 +62,8 @@ export class AccountService {
   /**
    * Teardown order (plan): subscription → revoke refresh token →
    * invalidate ntfy binding → wipe store entry.
+   * Progress is persisted after each successful external step so retries
+   * remain idempotent across partial failures.
    */
   async removeAccount(accountId: string): Promise<void> {
     const existing = this.store.getAccount(accountId);
@@ -56,22 +71,56 @@ export class AccountService {
       return;
     }
 
-    if (existing.subscriptionName) {
-      await this.events.deleteSubscription(existing.subscriptionName);
+    let current = { ...existing };
+
+    if (current.subscriptionName) {
+      const refreshToken =
+        current.encryptedRefreshToken.length > 0
+          ? this.crypto.decrypt(current.encryptedRefreshToken)
+          : "";
+      if (!refreshToken) {
+        throw new Error("missing refresh token for subscription delete");
+      }
+      await this.events.deleteSubscription({
+        subscriptionName: current.subscriptionName,
+        refreshToken,
+      });
+      current = {
+        ...current,
+        subscriptionName: null,
+        subscriptionExpireTime: null,
+      };
+      this.store.upsertAccount(current);
     }
 
-    const refreshToken = this.crypto.decrypt(existing.encryptedRefreshToken);
-    await this.events.revokeToken(refreshToken);
-
-    this.store.upsertAccount({
-      ...existing,
-      ntfyBindingActive: false,
-      subscriptionName: null,
-      subscriptionExpireTime: null,
-      encryptedRefreshToken: "",
-    });
+    if (current.encryptedRefreshToken.length > 0) {
+      const refreshToken = this.crypto.decrypt(current.encryptedRefreshToken);
+      await this.events.revokeToken(refreshToken);
+      current = {
+        ...current,
+        encryptedRefreshToken: "",
+        ntfyBindingActive: false,
+      };
+      this.store.upsertAccount(current);
+    } else if (current.ntfyBindingActive) {
+      current = { ...current, ntfyBindingActive: false };
+      this.store.upsertAccount(current);
+    }
 
     this.store.deleteAccount(accountId);
+  }
+
+  /** True when the presented refresh token matches the stored ciphertext. */
+  ownsRefreshToken(accountId: string, refreshToken: string): boolean {
+    const existing = this.store.getAccount(accountId);
+    if (!existing || !existing.encryptedRefreshToken) {
+      return false;
+    }
+    try {
+      return this.crypto.decrypt(existing.encryptedRefreshToken) === refreshToken;
+    } catch {
+      return false;
+    }
   }
 
   setAccountMuted(accountId: string, muted: boolean): void {

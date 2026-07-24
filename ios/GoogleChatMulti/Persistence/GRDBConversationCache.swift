@@ -24,37 +24,23 @@ public actor GRDBConversationCache: ConversationCaching {
         }
     }
 
-    public func upsertConversations(_ rows: [ConversationSummary]) async throws {
+    public func replaceConversations(_ rows: [ConversationSummary]) async throws {
+        guard let db else { return }
+        sqlite3_exec(db, "BEGIN IMMEDIATE;", nil, nil, nil)
+        sqlite3_exec(db, "DELETE FROM conversations;", nil, nil, nil)
         for row in rows {
-            let sql = """
-            INSERT INTO conversations(
-              composite_id, account_id, account_label, account_color_hex, space_name,
-              title, preview, last_activity, unread_count, is_dm
-            ) VALUES (?,?,?,?,?,?,?,?,?,?)
-            ON CONFLICT(composite_id) DO UPDATE SET
-              account_label=excluded.account_label,
-              account_color_hex=excluded.account_color_hex,
-              title=excluded.title,
-              preview=excluded.preview,
-              last_activity=excluded.last_activity,
-              unread_count=excluded.unread_count,
-              is_dm=excluded.is_dm;
-            """
-            var stmt: OpaquePointer?
-            guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { continue }
-            defer { sqlite3_finalize(stmt) }
-            bind(stmt, 1, row.compositeId)
-            bind(stmt, 2, row.accountId.rawValue)
-            bind(stmt, 3, row.accountLabel)
-            bind(stmt, 4, row.accountColorHex)
-            bind(stmt, 5, row.spaceName)
-            bind(stmt, 6, row.title)
-            bind(stmt, 7, row.lastMessagePreview)
-            sqlite3_bind_double(stmt, 8, row.lastActivityAt.timeIntervalSince1970)
-            sqlite3_bind_int(stmt, 9, Int32(row.unreadCount))
-            sqlite3_bind_int(stmt, 10, row.isDirectMessage ? 1 : 0)
-            sqlite3_step(stmt)
+            insert(row)
         }
+        sqlite3_exec(db, "COMMIT;", nil, nil, nil)
+    }
+
+    public func deleteConversations(accountId: AccountID) async throws {
+        let sql = "DELETE FROM conversations WHERE account_id = ?;"
+        var stmt: OpaquePointer?
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return }
+        defer { sqlite3_finalize(stmt) }
+        bind(stmt, 1, accountId.rawValue)
+        sqlite3_step(stmt)
     }
 
     public func loadConversations() async throws -> [ConversationSummary] {
@@ -86,6 +72,29 @@ public actor GRDBConversationCache: ConversationCaching {
             )
         }
         return rows
+    }
+
+    private func insert(_ row: ConversationSummary) {
+        let sql = """
+        INSERT INTO conversations(
+          composite_id, account_id, account_label, account_color_hex, space_name,
+          title, preview, last_activity, unread_count, is_dm
+        ) VALUES (?,?,?,?,?,?,?,?,?,?);
+        """
+        var stmt: OpaquePointer?
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return }
+        defer { sqlite3_finalize(stmt) }
+        bind(stmt, 1, row.compositeId)
+        bind(stmt, 2, row.accountId.rawValue)
+        bind(stmt, 3, row.accountLabel)
+        bind(stmt, 4, row.accountColorHex)
+        bind(stmt, 5, row.spaceName)
+        bind(stmt, 6, row.title)
+        bind(stmt, 7, row.lastMessagePreview)
+        sqlite3_bind_double(stmt, 8, row.lastActivityAt.timeIntervalSince1970)
+        sqlite3_bind_int(stmt, 9, Int32(row.unreadCount))
+        sqlite3_bind_int(stmt, 10, row.isDirectMessage ? 1 : 0)
+        sqlite3_step(stmt)
     }
 
     private func openAndMigrate() {
