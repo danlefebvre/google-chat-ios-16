@@ -1,0 +1,25 @@
+# Swift / Xcode
+ios/.build/
+ios/.swiftpm/
+ios/*.xcodeproj/
+ios/*.xcworkspace/
+DerivedData/
+*.xcuserstate
+xcuserdata/
+
+# Go
+relay/bin/
+*.exe
+
+# Env / secrets
+.env
+.env.*
+*.pem
+
+# OS / editors
+.DS_Store
+.idea/
+.vscode/
+
+# Swiftly local pin (optional keep)
+# .swift-version

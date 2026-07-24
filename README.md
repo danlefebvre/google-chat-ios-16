@@ -10,19 +10,44 @@ Personal multi-account Google Chat client aimed at **iOS 16.7 / iPhone 8**, wher
 
 ## Plan
 
-See **[docs/PLAN.md](docs/PLAN.md)** for the full product/technical plan:
+See **[docs/PLAN.md](docs/PLAN.md)** for the full product/technical plan.
 
-- Native SwiftUI + Google Chat API (not a web wrapper)
-- Multi-account OAuth with a merged inbox
-- **ntfy-first** dual-account alerts via a small relay (no APNs in our app; free Apple sideload)
-- Local in-app banners only as fallback when the Chat app is already open
+## Repo layout
+
+```text
+/
+  docs/PLAN.md
+  ios/          # SwiftUI app + GoogleChatCore (SPM, unit-tested)
+  relay/        # Go: Workspace Events / Pub/Sub → ntfy.sh
+  scripts/      # local smoke helpers
+```
 
 ## Locked decisions
 
 - Free Apple sideload + **ntfy.sh** alerts (message previews)
 - N Google accounts (start with personal + work); Workspace admin will allowlist OAuth
 - Heavy MVP: spaces/DMs, text, reactions, attachments
+- Account-removal teardown: relay (subscription → token → binding) before device Keychain wipe
+
+## Develop
+
+```bash
+# All automated tests (relay + GoogleChatCore)
+./scripts/test-all.sh
+
+# Relay only
+cd relay && go test ./...
+NTFY_TOPIC=your-secret-topic ./scripts/run-relay.sh
+./scripts/phase0-smoke.sh
+
+# iOS domain tests
+cd ios && swift test
+# On macOS: brew install xcodegen && cd ios && xcodegen generate && open GoogleChatMulti.xcodeproj
+```
 
 ## Status
 
-Planning only — implementation not started. Decisions locked; ready to build when you say go.
+Implementation started (TDD):
+
+- Relay: health, manual publish, Pub/Sub push → ntfy preview, mutes/quiet hours, subscription TTL refresh, account teardown
+- iOS core: multi-account IDs, inbox merge/filter/search, Chat API client/models, sync upsert, attachments budget, deep links, SwiftUI shell
