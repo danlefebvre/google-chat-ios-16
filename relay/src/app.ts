@@ -1,3 +1,4 @@
+import { timingSafeEqual } from "node:crypto";
 import express, { type Express, type Request, type Response } from "express";
 import helmet from "helmet";
 import { AccountService } from "./accounts.js";
@@ -43,6 +44,18 @@ function unconfiguredEventsClient(): EventsClient {
     deleteSubscription: fail,
     revokeToken: fail,
   };
+}
+
+
+function secretsEqual(left: string, right: string): boolean {
+  const a = Buffer.from(left);
+  const b = Buffer.from(right);
+  if (a.length !== b.length) {
+    // Consume comparable work without throwing on length mismatch.
+    timingSafeEqual(a, a);
+    return false;
+  }
+  return timingSafeEqual(a, b);
 }
 
 function bearerToken(req: Request): string {
@@ -97,8 +110,8 @@ export function createApp(options: CreateAppOptions): Express {
           typeof req.query.token === "string" ? req.query.token : "";
         const headerToken = req.header("x-goog-channel-token") ?? "";
         if (
-          queryToken !== options.pubsubVerifyToken &&
-          headerToken !== options.pubsubVerifyToken
+          !secretsEqual(queryToken, options.pubsubVerifyToken) &&
+          !secretsEqual(headerToken, options.pubsubVerifyToken)
         ) {
           res.status(401).json({ error: "unauthorized" });
           return;
@@ -183,7 +196,7 @@ export function createApp(options: CreateAppOptions): Express {
 
   app.use("/admin", (req, res, next) => {
     const token = bearerToken(req);
-    if (token !== options.adminToken) {
+    if (!secretsEqual(token, options.adminToken)) {
       res.status(401).json({ error: "unauthorized" });
       return;
     }
