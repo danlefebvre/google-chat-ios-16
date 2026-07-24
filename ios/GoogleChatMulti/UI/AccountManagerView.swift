@@ -122,7 +122,7 @@ struct AccountManagerView: View {
     }
 
     private func suggestedLabel(for email: String, index: Int) -> String {
-        if email.contains(".com") && index == 0 { return "Personal" }
+        if index == 0 { return "Personal" }
         if index == 1 { return "Work" }
         return "Account \(index + 1)"
     }
