@@ -37,4 +37,4 @@ Manual Phase 0 smoke: `POST /admin/test-ntfy` (Bearer admin token)
 
 Dockerfile is included for Cloud Run / Fly. Provide the env vars from `.env.example`.
 
-Account state defaults to a JSON file (`ACCOUNT_STORE_PATH`, default `data/accounts.json`) so restarts keep linked accounts. For multi-replica production, put that path on a shared volume or swap `FileAccountStore` for Firestore/SQLite.
+Account state defaults to a JSON file (`ACCOUNT_STORE_PATH`, default `data/accounts.json` → `/app/data/accounts.json` in the image). **That file store requires durable storage** — mount a persistent volume at `/app/data` (the image declares `VOLUME /app/data`). Deployments without a durable mount must configure an external store (Firestore/SQLite/etc.) instead of relying on ephemeral container disk; otherwise linked accounts are lost on restart or redeploy. For multi-replica production, use a shared volume or that external store.
