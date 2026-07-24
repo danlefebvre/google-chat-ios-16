@@ -5,4 +5,8 @@ node_modules/
 .DS_Store
 DerivedData/
 .swiftpm/
+ios/GoogleChatMultiCore/.build/
+*.xcodeproj/xcuserdata/
+*.xcworkspace/xcuserdata/
+.idea/
 

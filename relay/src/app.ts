@@ -4,6 +4,7 @@ import { createTokenCrypto } from "./crypto.js";
 import { createGoogleEventsClient } from "./google.js";
 import { formatNtfyNotification, NtfyPublisher } from "./ntfy.js";
 import { handlePubSubPush, type PubSubPushBody } from "./pubsub.js";
+import { renewExpiringSubscriptions } from "./renewal.js";
 import type { AccountStore } from "./store.js";
 import type { EventsClient, NtfyConfig } from "./types.js";
 
@@ -210,6 +211,30 @@ export function createApp(options: CreateAppOptions): Express {
     const quiet = { startHour, endHour, timeZone: String(timeZone) };
     options.store.setQuietHours(quiet);
     res.status(200).json({ quietHours: quiet });
+  });
+
+  app.post("/admin/renew-subscriptions", async (req, res) => {
+    const horizonHours =
+      typeof req.body?.horizonHours === "number" ? req.body.horizonHours : 24;
+    const result = await renewExpiringSubscriptions({
+      store: options.store,
+      events,
+      crypto,
+      horizonMs: horizonHours * 60 * 60 * 1000,
+      alertRenewFailure: async ({ accountId, error }) => {
+        console.error("subscription renew failed", accountId, error);
+        try {
+          await publisher.publish({
+            title: "[Relay] subscription renew failed",
+            body: `account ${accountId}: ${error instanceof Error ? error.message : "error"}`,
+            tags: ["warning"],
+          });
+        } catch (publishError) {
+          console.error("failed to alert renew failure", publishError);
+        }
+      },
+    });
+    res.status(200).json(result);
   });
 
   return app;
