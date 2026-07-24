@@ -10,12 +10,25 @@ Personal multi-account Google Chat client aimed at **iOS 16.7 / iPhone 8**, wher
 
 ## Plan
 
-See **[docs/PLAN.md](docs/PLAN.md)** for the full product/technical plan:
+See **[docs/PLAN.md](docs/PLAN.md)** for the full product/technical plan.
 
-- Native SwiftUI + Google Chat API (not a web wrapper)
-- Multi-account OAuth with a merged inbox
-- **ntfy-first** dual-account alerts via a small relay (no APNs in our app; free Apple sideload)
-- Local in-app banners only as fallback when the Chat app is already open
+## Repo layout
+
+```text
+docs/PLAN.md          Product & technical plan
+ios/                  SwiftUI app + GoogleChatCore (SPM)
+relay/                Workspace Events → ntfy relay (TypeScript)
+scripts/              Phase 0 smoke tests & bootstrap helpers
+```
+
+## Status
+
+**MVP scaffold implemented** (TDD for relay; XCTest targets for iOS core):
+
+- Relay: health check, ntfy publisher with previews, Pub/Sub handler, mutes, account teardown
+- iOS core: multi-account models, inbox merge/filter, Chat API client, GRDB cache, deep links
+- iOS UI: unified home, thread view, account manager (demo sign-in placeholders for real OAuth)
+- Scripts: ntfy smoke test, relay bootstrap, Phase 0 checklist
 
 ## Locked decisions
 
@@ -23,6 +36,29 @@ See **[docs/PLAN.md](docs/PLAN.md)** for the full product/technical plan:
 - N Google accounts (start with personal + work); Workspace admin will allowlist OAuth
 - Heavy MVP: spaces/DMs, text, reactions, attachments
 
-## Status
+## Getting started
 
-Planning only — implementation not started. Decisions locked; ready to build when you say go.
+### 1. Phase 0 (device + Google Cloud)
+
+```bash
+./scripts/phase0-checklist.sh
+NTFY_TOPIC=your-topic ./scripts/phase0-ntfy-smoke.sh
+```
+
+### 2. Relay
+
+```bash
+./scripts/bootstrap-relay.sh
+cd relay && set -a && source .env && set +a && npm start
+```
+
+### 3. iOS app
+
+See **[ios/README.md](ios/README.md)** — open in Xcode on macOS, iOS 16 deployment target, wire Google Sign-In when ready.
+
+## Tests
+
+```bash
+cd relay && npm test
+cd ios && swift test   # macOS + Xcode required
+```
