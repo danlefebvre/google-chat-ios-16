@@ -1,5 +1,11 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname } from "node:path";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  writeFileSync,
+} from "node:fs";
+import { dirname, join } from "node:path";
 import type { AccountRecord, QuietHours } from "./types.js";
 
 export interface AccountStore {
@@ -104,7 +110,13 @@ export class FileAccountStore implements AccountStore {
       accounts: this.listAccounts(),
       quietHours: this.getQuietHours(),
     };
-    mkdirSync(dirname(this.filePath), { recursive: true });
-    writeFileSync(this.filePath, `${JSON.stringify(state, null, 2)}\n`, "utf8");
+    const directory = dirname(this.filePath);
+    mkdirSync(directory, { recursive: true });
+    const tempPath = join(
+      directory,
+      `.${Date.now()}-${process.pid}-${Math.random().toString(16).slice(2)}.tmp`,
+    );
+    writeFileSync(tempPath, `${JSON.stringify(state, null, 2)}\n`, "utf8");
+    renameSync(tempPath, this.filePath);
   }
 }
