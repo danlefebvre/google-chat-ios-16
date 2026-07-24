@@ -1,0 +1,12 @@
+.DS_Store
+.build/
+.swiftpm/
+DerivedData/
+*.xcodeproj/
+*.xcworkspace/
+relay/data/
+relay/relay
+.env
+*.pem
+xcuserdata/
+.idea/

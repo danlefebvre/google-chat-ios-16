@@ -1,0 +1,34 @@
+name: GoogleChatMulti
+options:
+  bundleIdPrefix: com.googlechatmulti
+  deploymentTarget:
+    iOS: "16.0"
+  xcodeVersion: "15.0"
+settings:
+  base:
+    SWIFT_VERSION: "5.9"
+    TARGETED_DEVICE_FAMILY: "1"
+    IPHONEOS_DEPLOYMENT_TARGET: "16.0"
+    # Free sideload: do not enable push / APS entitlements.
+packages:
+  GoogleChatCore:
+    path: .
+targets:
+  GoogleChatMulti:
+    type: application
+    platform: iOS
+    sources:
+      - path: App
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.googlechatmulti.app
+        INFOPLIST_FILE: App/Info.plist
+        GOOGLE_CLIENT_ID: REPLACE_WITH_OAUTH_CLIENT_ID.apps.googleusercontent.com
+        GOOGLE_URL_SCHEME: com.googleusercontent.apps.REPLACE_WITH_REVERSED_CLIENT_ID
+    dependencies:
+      - package: GoogleChatCore
+        product: GoogleChatCore
+    info:
+      path: App/Info.plist
+      properties:
+        CFBundleDisplayName: Chat Multi
