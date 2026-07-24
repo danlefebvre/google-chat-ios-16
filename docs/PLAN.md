@@ -107,7 +107,7 @@ Controls:
 - Standard chat bubble list for one space
 - Account context sticky in the nav bar (so you never send as the wrong identity)
 - Send/edit/delete/react using that account’s token only
-- Attachments: download via Chat media API; upload later if heavy
+- Attachments in MVP: download + upload via Chat media API (memory-safe thumbnails on iPhone 8)
 
 ### Notifications (via ntfy)
 
@@ -126,7 +126,7 @@ Mom: dinner at 7?
 - One topic for everything (simplest), or separate topics per Google account
 - Per-account / per-space mute honored in the relay before publish
 - Quiet hours in relay and/or ntfy app settings
-- Privacy default: generic “New message in {space}” unless preview is enabled
+- **Preview only (decided):** ntfy body includes message text preview (sender + truncated content), not a generic placeholder
 
 ---
 
@@ -144,12 +144,13 @@ Mom: dinner at 7?
 
 ### Phase 1 — MVP (chat + first-class ntfy)
 
-**Client (free sideload)**
+**Client (free sideload) — heavy MVP floor**
 
-- Multi-account sign-in / sign-out / token refresh
+- Multi-account sign-in / sign-out / token refresh (**N accounts**)
 - Unified conversation list (merged, sorted by last activity)
-- Open space / DM, paginated message history
+- Open spaces + DMs, paginated message history
 - Send text messages; basic reactions
+- **Attachments:** image/file download + upload (thumbnails, careful memory limits on iPhone 8)
 - Mark space read (`users.spaces.spaceReadState`)
 - Offline cache of recent threads (**GRDB/SQLite**)
 - Account-colored badges throughout
@@ -159,22 +160,22 @@ Mom: dinner at 7?
 **Relay (ships with MVP)**
 
 - Maintain Workspace Events subscriptions + Pub/Sub consumer for each Google account
-- Publish to ntfy (title = `[Account] space`, body = truncated text or privacy-safe line)
+- Publish to **ntfy.sh** with **message preview** (title = `[Account] space`, body = sender + truncated text)
 - Refresh subscription TTLs; retry failed deliveries
 - Honor per-account / per-space mutes + quiet hours
-- Config: ntfy base URL, topic, auth token
+- Config: `https://ntfy.sh`, secret topic, access token
 
-Out of MVP: Meet huddles, Gemini summaries, smart chips, Drive previews, custom sections parity, apps/bots marketplace, full search parity, native APNs.
+Out of MVP: Meet huddles, Gemini summaries, smart chips, Drive rich previews, custom sections parity, apps/bots marketplace, full search parity, native APNs.
 
 ### Phase 2 — Deeper Chat parity (as needed)
 
 - Threads / replies UI
-- File attach & image preview
 - Unread sectioning closer to chat.google.com home
 - People lookup / find DM
 - Share extension (“send to Chat”)
 - Richer ntfy actions (Open / Mute space)
 - Optional later: paid Apple Dev + APNs if you ever want alerts inside our app itself
+- Optional later: self-hosted ntfy if `ntfy.sh` limits become painful
 
 ---
 
@@ -234,8 +235,8 @@ Re-consent when scopes expand.
 
 - Google tokens only in **Keychain** on device
 - Relay stores minimum needed for events + ntfy publish; encrypt refresh tokens at rest
-- ntfy topic must be unguessable; prefer access tokens / self-hosted auth
-- Privacy-safe notification bodies by default
+- ntfy topic must be unguessable; use an **access token** on `ntfy.sh`
+- **Notification previews include message text** (accepted tradeoff); protect the topic, not the lock-screen wording
 - Clear data wipe on account remove (device + relay bindings)
 
 ---
@@ -255,7 +256,7 @@ Re-consent when scopes expand.
 | --- | --- | --- |
 | ntfy iOS app drops iOS 16 support | No reliable alerts | Verify Phase 0; fallback to Bark/self-host/email |
 | Public ntfy.sh rate limits / topic guessing | Missed or leaked alerts | Secret topic + token; or self-host |
-| Work Workspace blocks OAuth client | Can’t see work chats / events | Admin allowlist or company-internal OAuth app |
+| Work Workspace blocks OAuth client | Can’t see work chats / events | **You are Workspace admin** — allowlist/configure the OAuth client in API controls |
 | Restricted scopes / unverified app warning | Scary consent screen | Keep OAuth in Testing; add test users |
 | Relay or Pub/Sub outage | Missed pushes | Health checks; retry; in-app fallback when open |
 | Workspace Events subscription expiry | Silent alert death | TTL refresh job; alert via ntfy if renew fails |
@@ -286,38 +287,38 @@ Re-consent when scopes expand.
 
 ---
 
-## Decision checklist
+## Decision checklist (locked)
 
-1. **Push channel:** **ntfy** (decided). Not APNs in our app.
-2. **Apple Developer:** **Free sideload** (decided). Paid only if we later want TestFlight/APNs.
-3. **Work account admin access:** Can you allowlist a custom OAuth client?
-4. **Accounts in v1:** Exactly two (personal + work), or N accounts?
-5. **Feature floor:** Text + DMs only, or spaces + reactions (+ attachments later)?
-6. **Notification privacy:** Preview message text in ntfy, or generic “New message in {space}”?
-7. **ntfy hosting:** Public `ntfy.sh` or self-hosted?
-
-Default assumptions if unstated: **N accounts (start with 2)**, **ntfy relay in MVP**, **free Apple sideload**, **text + reactions + unified inbox first**, **privacy-safe bodies**, **public ntfy.sh with secret topic + token** (self-host later if needed).
+1. **Push channel:** **ntfy** — not APNs in our app
+2. **Apple Developer:** **Free sideload**
+3. **Work account admin access:** **Yes** — you are Workspace admin and will allowlist the OAuth client
+4. **Accounts in v1:** **N accounts** (start with personal + work; UI supports adding more)
+5. **Feature floor:** **Heavy** — spaces + DMs + text + reactions + **attachments** in MVP
+6. **Notification privacy:** **Preview only** — sender + message text in ntfy body
+7. **ntfy hosting:** **Public `ntfy.sh`** with secret topic + access token
 
 ---
 
-## Implementation order (once remaining decisions are set)
+## Implementation order
 
-1. Phase 0: ntfy on iPhone 8 + Google OAuth smoke tests
-2. Scaffold relay (health check, manual → ntfy publish)
-3. Scaffold iOS 16 SwiftUI app + Google OAuth (multi-account Keychain)
-4. Workspace Events → Pub/Sub → ntfy for both accounts
+1. Phase 0: ntfy on iPhone 8 + Google OAuth smoke tests (personal + work; admin allowlist if needed)
+2. Scaffold relay (health check, manual → `ntfy.sh` publish with preview text)
+3. Scaffold iOS 16 SwiftUI app + Google OAuth (N-account Keychain)
+4. Workspace Events → Pub/Sub → ntfy for each signed-in account
 5. `spaces.list` → local DB → unified home UI
-6. Thread view + send message
-7. Optional deep links / ntfy click actions into the app
-8. Harden for iPhone 8 + relay TTL/retry + mutes
-9. Optional later: attachments, search, richer parity
+6. Thread view + send message + reactions
+7. Attachments download/upload with iPhone 8 memory limits
+8. Deep links / ntfy click actions into the app
+9. Harden: pagination, offline cache, relay TTL/retry, mutes
+10. Later polish: search, threads UI, richer parity
 
 ---
 
 ## Success criteria
 
-- Both personal and work accounts signed in simultaneously in the Chat app
-- One home list shows conversations from both, clearly labeled
+- N Google accounts can be signed in simultaneously (validated with at least personal + work)
+- One home list shows conversations from all accounts, clearly labeled
 - Opening a thread sends as the correct account
-- New messages from **either** account alert via **ntfy** while the Chat app is backgrounded/killed
+- Text, reactions, and attachments work in MVP
+- New messages alert via **ntfy.sh** with **content preview** while the Chat app is backgrounded/killed
 - App installs via free sideload and remains usable on **iPhone 8 / iOS 16.7.16**
