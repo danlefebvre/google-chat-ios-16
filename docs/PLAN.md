@@ -52,13 +52,13 @@ Ship **A**. Use Safari only as a temporary bridge while the native MVP is built.
 - OAuth consent screen in **Testing** mode is enough for personal use (add both Google accounts as test users)
 - Chat message/space scopes are often **restricted/sensitive** — public App Store distribution would need Google verification; personal Testing mode avoids that
 - **Workspace admin** can block third-party OAuth apps — work account access may need admin approval of the OAuth client
-- Official Google Sign-In iOS SDK is awkward for concurrent multi-account; plan on **GoogleSignIn for the interactive flow + GTMAppAuth/Keychain for storing multiple authorizations** (keyed by `sub` / email)
+- Official Google Sign-In iOS SDK is awkward for concurrent multi-account; plan on **GoogleSignIn for the interactive flow + GTMAppAuth/Keychain for storing multiple authorizations**, keyed by the immutable issuer/subject pair (`{issuer, sub}`); treat email as display-only
 
 ### Notifications (ntfy-first)
 
 Our sideloaded app cannot use APNs without a paid Apple Developer Program membership. Instead:
 
-1. You subscribe in the **ntfy** app to a private topic (or topics), e.g. `https://ntfy.sh/your-secret-topic` or a self-hosted server
+1. You subscribe in the **ntfy** app to a hard-to-guess topic (or topics), e.g. `https://ntfy.sh/your-secret-topic` or a self-hosted server
 2. Relay creates **Google Workspace Events** subscriptions per Google account
 3. Events land on **Pub/Sub** → relay handler
 4. Relay `POST`s to ntfy with title/body/tags; ntfy’s iOS app delivers the system notification
@@ -70,14 +70,14 @@ Our sideloaded app cannot use APNs without a paid Apple Developer Program member
 
 | Option | Cost | Notes |
 | --- | --- | --- |
-| **Public `ntfy.sh` (chosen)** | Free | Use a **hard-to-guess topic** + access token; watch rate limits |
+| **Public `ntfy.sh` (chosen)** | Free | Topics are **secret-but-not-private**: anyone who discovers the topic can publish/subscribe anonymously. A hard-to-guess topic name plus an access token (or AutoLogin) reduces exposure but is not ACL-style protection; watch rate limits |
 | Self-hosted ntfy | Free (VPS) | Later option if privacy/limits require it |
 
 Requires:
 
 - Always-on relay (Cloud Run / Fly / similar) for Google → ntfy
 - Stored Google refresh tokens / event-subscription credentials on the relay (encrypted at rest)
-- ntfy topic URL (+ auth) configured as a relay secret
+- ntfy topic URL (+ optional access token / AutoLogin) configured as a relay secret
 
 ---
 
@@ -87,7 +87,7 @@ Requires:
 
 Single home list that merges conversations from all signed-in accounts:
 
-```
+```text
 [Work]  #eng-standup     Alice: deploy looks good     2m
 [Home]  Family            Mom: dinner at 7?           11m
 [Work]  DM · Sam          You: sent the doc           1h
@@ -97,7 +97,7 @@ Each row carries:
 
 - Account badge (color + short label: Work / Personal)
 - Space/DM title, last message preview, unread state, timestamp
-- Stable composite id: `{accountId}:{spaceName}`
+- Stable composite id: `{accountId}:{spaceName}`, where `accountId` is the `{issuer, sub}` key and `spaceName` is the immutable Chat API resource name (`spaces/{spaceId}`), not the mutable space title — so renamed spaces keep the same entry
 
 Controls:
 
@@ -116,12 +116,12 @@ Controls:
 
 Example ntfy alerts:
 
-```
+```text
 [Work] #eng-standup
 Alice: deploy looks good
 ```
 
-```
+```text
 [Personal] Family
 Mom: dinner at 7?
 ```
@@ -166,7 +166,8 @@ Mom: dinner at 7?
 - Publish to **ntfy.sh** with **message preview** (title = `[Account] space`, body = sender + truncated text)
 - Refresh subscription TTLs; retry failed deliveries
 - Honor per-account / per-space mutes + quiet hours
-- Config: `https://ntfy.sh`, secret topic, access token
+- Config: `https://ntfy.sh`, secret-but-not-private topic, access token
+- **Account-removal teardown (relay before device):** (1) delete the Workspace Events subscription for that account, (2) revoke or delete the relay-stored refresh token, (3) remove or invalidate the ntfy binding for that account, then (4) wipe device-side binding/Keychain entries — so stale access tokens cannot keep triggering notifications
 
 Out of MVP: Meet huddles, Gemini summaries, smart chips, Drive rich previews, custom sections parity, apps/bots marketplace, full search parity, native APNs.
 
@@ -184,7 +185,7 @@ Out of MVP: Meet huddles, Gemini summaries, smart chips, Drive rich previews, cu
 
 ## Technical architecture
 
-```
+```text
 ┌──────────────────────────────────────────────┐
 │ iPhone 8 / iOS 16.7                          │
 │  ┌─────────────────────┐  ┌────────────────┐ │
@@ -228,9 +229,10 @@ Out of MVP: Meet huddles, Gemini summaries, smart chips, Drive rich previews, cu
 - `openid` `email` `profile`
 - `https://www.googleapis.com/auth/chat.spaces.readonly`
 - `https://www.googleapis.com/auth/chat.messages` (or readonly + `chat.messages.create` if split works)
+- `https://www.googleapis.com/auth/chat.users.readstate`
 - Workspace Events scopes required for subscriptions used by the relay
 
-Re-consent when scopes expand.
+Re-consent when scopes expand so users authorize the expanded scope set.
 
 ---
 
@@ -238,17 +240,17 @@ Re-consent when scopes expand.
 
 - Google tokens only in **Keychain** on device
 - Relay stores minimum needed for events + ntfy publish; encrypt refresh tokens at rest
-- ntfy topic must be unguessable; use an **access token** on `ntfy.sh`
-- **Notification previews include message text** (accepted tradeoff); protect the topic, not the lock-screen wording
-- Clear data wipe on account remove (device + relay bindings)
+- Public `ntfy.sh` topics are **secret-but-not-private**: a hard-to-guess topic plus an **access token** / AutoLogin reduces anonymous exposure but does not grant ACL-style protection
+- **Notification previews include message text** (accepted tradeoff); reduce topic exposure, not the lock-screen wording
+- On account remove: follow relay teardown (delete Workspace Events subscription → revoke/delete refresh token → invalidate ntfy binding) before device-side wipe
 
 ---
 
 ## Distribution plan for iPhone 8
 
 1. Free Apple ID + Xcode install of the Chat app (re-sign/refresh when the 7-day profile expires), or AltStore automation
-2. Install **ntfy** from the App Store; subscribe to the private topic
-3. Deploy relay; wire Google accounts + ntfy secret
+2. Install **ntfy** from the App Store; subscribe to the hard-to-guess topic (optionally with access token / AutoLogin)
+3. Deploy relay; wire Google accounts + ntfy topic (+ auth)
 4. Skip App Store / TestFlight / paid Apple push unless requirements change later
 
 ---
@@ -258,7 +260,7 @@ Re-consent when scopes expand.
 | Risk | Impact | Mitigation |
 | --- | --- | --- |
 | ntfy iOS app drops iOS 16 support | No reliable alerts | Verify Phase 0; fallback to Bark/self-host/email |
-| Public ntfy.sh rate limits / topic guessing | Missed or leaked alerts | Secret topic + token; or self-host |
+| Public ntfy.sh rate limits / topic discovery | Missed or leaked alerts | Hard-to-guess topic + token (not ACL); or self-host |
 | Work Workspace blocks OAuth client | Can’t see work chats / events | **You are Workspace admin** — allowlist/configure the OAuth client in API controls |
 | Restricted scopes / unverified app warning | Scary consent screen | Keep OAuth in Testing; add test users |
 | Relay or Pub/Sub outage | Missed pushes | Health checks; retry; in-app fallback when open |
@@ -278,7 +280,7 @@ Re-consent when scopes expand.
 
 ## Suggested repo layout (when implementation starts)
 
-```
+```text
 /
   README.md
   docs/PLAN.md                 ← this document
@@ -298,7 +300,7 @@ Re-consent when scopes expand.
 4. **Accounts in v1:** **N accounts** (start with personal + work; UI supports adding more)
 5. **Feature floor:** **Heavy** — spaces + DMs + text + reactions + **attachments** in MVP
 6. **Notification privacy:** **Preview only** — sender + message text in ntfy body
-7. **ntfy hosting:** **Public `ntfy.sh`** with secret topic + access token
+7. **ntfy hosting:** **Public `ntfy.sh`** with hard-to-guess (secret-but-not-private) topic + access token
 
 ---
 
