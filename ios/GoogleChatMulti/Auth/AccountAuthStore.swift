@@ -128,7 +128,8 @@ public final class KeychainAccountAuthStore: AccountAuthStore {
     }
 }
 
-private struct AuthTokenProvider: TokenProviding {
+/// Keychain/in-memory stores serialize credential access; mark unchecked Sendable for ChatAPIClient.
+private struct AuthTokenProvider: TokenProviding, @unchecked Sendable {
     let store: AccountAuthStore
 
     func accessToken(for accountId: AccountID) async throws -> String {
