@@ -1,0 +1,33 @@
+name: GoogleChatMulti
+options:
+  bundleIdPrefix: com.danlefebvre
+  deploymentTarget:
+    iOS: "16.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: "5.9"
+    TARGETED_DEVICE_FAMILY: "1"
+packages:
+  GoogleChatCore:
+    path: .
+targets:
+  GoogleChatMulti:
+    type: application
+    platform: iOS
+    sources:
+      - path: GoogleChatMulti
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.danlefebvre.GoogleChatMulti
+        INFOPLIST_FILE: GoogleChatMulti/Support/Info.plist
+        IPHONEOS_DEPLOYMENT_TARGET: "16.0"
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: ""
+        # Free sideload: no push entitlement / no APNs
+        CODE_SIGN_ENTITLEMENTS: ""
+    dependencies:
+      - package: GoogleChatCore
+        product: GoogleChatCore
+    scheme:
+      testTargets: []

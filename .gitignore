@@ -1,0 +1,11 @@
+.DS_Store
+.build/
+DerivedData/
+*.xcodeproj/
+*.xcworkspace/
+xcuserdata/
+Config.xcconfig
+relay/relay
+*.sqlite
+.env
+.swiftpm/
