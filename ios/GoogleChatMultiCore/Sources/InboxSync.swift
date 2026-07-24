@@ -111,9 +111,7 @@ public actor InboxSyncService {
             accountLabel: account.label,
             accountColorHex: account.colorHex,
             spaceName: space.name,
-            title: space.isDirectMessage && space.resolvedTitle == "DM"
-                ? "DM"
-                : space.resolvedTitle,
+            title: space.resolvedTitle,
             lastMessagePreview: preview,
             lastActivityAt: activity,
             unreadCount: 0,
