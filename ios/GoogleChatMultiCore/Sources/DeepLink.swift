@@ -46,6 +46,18 @@ public enum DeepLinkBuilder {
         components.queryItems = [
             URLQueryItem(name: "accountId", value: accountId.rawValue),
         ]
-        return components.url!
+        if let url = components.url {
+            return url
+        }
+        // Non-crashing fallback when URLComponents cannot assemble the link.
+        let encodedAccount = accountId.rawValue.addingPercentEncoding(
+            withAllowedCharacters: .urlQueryAllowed
+        ) ?? accountId.rawValue
+        let encodedSpace = spaceName.addingPercentEncoding(
+            withAllowedCharacters: .urlPathAllowed
+        ) ?? spaceName
+        return URL(
+            string: "\(DeepLinkParser.scheme)://space/\(encodedSpace)?accountId=\(encodedAccount)"
+        ) ?? URL(string: "\(DeepLinkParser.scheme)://space")!
     }
 }
