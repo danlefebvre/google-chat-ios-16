@@ -10,19 +10,55 @@ Personal multi-account Google Chat client aimed at **iOS 16.7 / iPhone 8**, wher
 
 ## Plan
 
-See **[docs/PLAN.md](docs/PLAN.md)** for the full product/technical plan:
+See **[docs/PLAN.md](docs/PLAN.md)** for the full product/technical plan.
 
-- Native SwiftUI + Google Chat API (not a web wrapper)
-- Multi-account OAuth with a merged inbox
-- **ntfy-first** dual-account alerts via a small relay (no APNs in our app; free Apple sideload)
-- Local in-app banners only as fallback when the Chat app is already open
+## Repo layout
+
+```text
+docs/PLAN.md          Product & architecture plan
+relay/                Workspace Events → ntfy relay (TypeScript, vitest TDD)
+ios/GoogleChatCore/   Shared Swift package (inbox, auth models, deep links)
+ios/GoogleChatMulti/  SwiftUI app (iOS 16+)
+scripts/              Phase 0 smoke tests & bootstrap helpers
+```
+
+## Quick start
+
+### Relay (notifications)
+
+```bash
+./scripts/bootstrap-relay.sh
+cd relay && npm install && npm test && npm run dev
+./scripts/phase0-ntfy-test.sh
+```
+
+### iOS app (requires macOS)
+
+```bash
+cd ios && xcodegen generate && open GoogleChatMulti.xcodeproj
+cd ios/GoogleChatCore && swift test
+```
+
+### Phase 0 Google API smoke test
+
+After OAuth on a test account:
+
+```bash
+ACCESS_TOKEN=ya29... ./scripts/phase0-google-chat-smoke.sh
+```
+
+## Status
+
+**MVP scaffold implemented** (TDD):
+
+- Relay: health, manual ntfy publish, Pub/Sub handler, mutes, quiet hours, account teardown
+- iOS core: unified inbox merge/filter/search, account ids, Chat API client, Keychain token store, SwiftUI shell
+- Scripts: Phase 0 ntfy + Google Chat smoke tests
+
+Remaining for production on device: GoogleSignIn wiring, GRDB cache, Workspace Events subscription registration, relay deploy with real credentials.
 
 ## Locked decisions
 
 - Free Apple sideload + **ntfy.sh** alerts (message previews)
 - N Google accounts (start with personal + work); Workspace admin will allowlist OAuth
 - Heavy MVP: spaces/DMs, text, reactions, attachments
-
-## Status
-
-Planning only — implementation not started. Decisions locked; ready to build when you say go.

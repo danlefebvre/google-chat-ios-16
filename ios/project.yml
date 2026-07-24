@@ -1,0 +1,24 @@
+name: GoogleChatMulti
+options:
+  bundleIdPrefix: com.googlechatmulti
+  deploymentTarget:
+    iOS: "16.0"
+packages:
+  GoogleChatCore:
+    path: ../GoogleChatCore
+targets:
+  GoogleChatMulti:
+    type: application
+    platform: iOS
+    sources:
+      - GoogleChatMulti
+    dependencies:
+      - package: GoogleChatCore
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: com.googlechatmulti.app
+      INFOPLIST_FILE: GoogleChatMulti/Info.plist
+      SWIFT_VERSION: "5.9"
+      IPHONEOS_DEPLOYMENT_TARGET: "16.0"
+      TARGETED_DEVICE_FAMILY: "1"
+    scheme:
+      testTargets: []
