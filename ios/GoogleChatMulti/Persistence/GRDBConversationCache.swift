@@ -26,13 +26,30 @@ public actor GRDBConversationCache: ConversationCaching {
     }
 
     public func replaceConversations(_ rows: [ConversationSummary]) async throws {
-        guard let db else { return }
-        sqlite3_exec(db, "BEGIN IMMEDIATE;", nil, nil, nil)
-        sqlite3_exec(db, "DELETE FROM conversations;", nil, nil, nil)
-        for row in rows {
-            insert(row)
+        guard let db else {
+            throw ConversationCacheError.databaseUnavailable
         }
-        sqlite3_exec(db, "COMMIT;", nil, nil, nil)
+        guard exec(db, "BEGIN IMMEDIATE;") else {
+            throw ConversationCacheError.transactionFailed("BEGIN")
+        }
+        var succeeded = false
+        defer {
+            if !succeeded {
+                _ = exec(db, "ROLLBACK;")
+            }
+        }
+        guard exec(db, "DELETE FROM conversations;") else {
+            throw ConversationCacheError.transactionFailed("DELETE")
+        }
+        for row in rows {
+            guard insert(row) else {
+                throw ConversationCacheError.transactionFailed("INSERT")
+            }
+        }
+        guard exec(db, "COMMIT;") else {
+            throw ConversationCacheError.transactionFailed("COMMIT")
+        }
+        succeeded = true
     }
 
     public func deleteConversations(accountId: AccountID) async throws {
