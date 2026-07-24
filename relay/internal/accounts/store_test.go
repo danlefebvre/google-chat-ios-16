@@ -1,6 +1,8 @@
 package accounts_test
 
 import (
+	"bytes"
+	"path/filepath"
 	"testing"
 
 	"github.com/danlefebvre/google-chat-ios-16/relay/internal/accounts"
@@ -55,6 +57,37 @@ func TestStore_TeardownDeletesSubscriptionTokenAndBinding(t *testing.T) {
 	}
 	if len(subs.order) == 0 || subs.order[0] != "delete-sub" {
 		t.Fatalf("teardown order = %v, want delete-sub first", subs.order)
+	}
+}
+
+func TestFileStore_PersistsEncryptedRefreshToken(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "accounts.json")
+	key := bytes.Repeat([]byte{9}, 32)
+
+	store, err := accounts.NewFileStore(path, key)
+	if err != nil {
+		t.Fatalf("NewFileStore: %v", err)
+	}
+	if err := store.Upsert(accounts.Account{
+		ID:           "issuer|sub-1",
+		Label:        "Work",
+		RefreshToken: "rt-secret",
+		Subscription: "subscriptions/sub-1",
+	}); err != nil {
+		t.Fatalf("Upsert: %v", err)
+	}
+
+	reopened, err := accounts.NewFileStore(path, key)
+	if err != nil {
+		t.Fatalf("reopen: %v", err)
+	}
+	got, ok := reopened.Get("issuer|sub-1")
+	if !ok {
+		t.Fatal("expected account after reopen")
+	}
+	if got.RefreshToken != "rt-secret" || got.Label != "Work" {
+		t.Fatalf("got %+v", got)
 	}
 }
 

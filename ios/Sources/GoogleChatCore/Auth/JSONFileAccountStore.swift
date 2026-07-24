@@ -1,16 +1,16 @@
 import Foundation
 
-/// Simple offline cache of recent threads (JSON file). Production iOS can swap in GRDB.
-public struct JSONFileConversationStore: ConversationStore {
+/// Durable account metadata cache (JSON file). Tokens remain in Keychain via `TokenStore`.
+public struct JSONFileAccountStore: AccountStore {
     private let fileURL: URL
-    private var byID: [ConversationID: Conversation]
+    private var byID: [AccountID: Account]
 
     public init(fileURL: URL) throws {
         self.fileURL = fileURL
         if FileManager.default.fileExists(atPath: fileURL.path) {
             let data = try Data(contentsOf: fileURL)
-            let rows = try ChatJSON.makeDecoder().decode([Conversation].self, from: data)
-            var map: [ConversationID: Conversation] = [:]
+            let rows = try ChatJSON.makeDecoder().decode([Account].self, from: data)
+            var map: [AccountID: Account] = [:]
             for row in rows { map[row.id] = row }
             self.byID = map
         } else {
@@ -18,11 +18,9 @@ public struct JSONFileConversationStore: ConversationStore {
         }
     }
 
-    public mutating func upsert(_ conversations: [Conversation]) throws {
+    public mutating func upsert(_ account: Account) throws {
         let snapshot = byID
-        for conversation in conversations {
-            byID[conversation.id] = conversation
-        }
+        byID[account.id] = account
         do {
             try persist()
         } catch {
@@ -31,9 +29,9 @@ public struct JSONFileConversationStore: ConversationStore {
         }
     }
 
-    public mutating func removeAll(for accountID: AccountID) throws {
+    public mutating func remove(_ id: AccountID) throws {
         let snapshot = byID
-        byID = byID.filter { $0.key.accountID != accountID }
+        byID[id] = nil
         do {
             try persist()
         } catch {
@@ -42,8 +40,12 @@ public struct JSONFileConversationStore: ConversationStore {
         }
     }
 
-    public func all() -> [Conversation] {
-        Array(byID.values).sorted { $0.lastActivityAt > $1.lastActivityAt }
+    public func all() -> [Account] {
+        Array(byID.values).sorted { $0.label.localizedStandardCompare($1.label) == .orderedAscending }
+    }
+
+    public func get(_ id: AccountID) -> Account? {
+        byID[id]
     }
 
     private func persist() throws {

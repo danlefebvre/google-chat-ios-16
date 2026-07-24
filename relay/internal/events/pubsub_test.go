@@ -60,3 +60,27 @@ func TestParsePush_RejectsMissingData(t *testing.T) {
 		t.Fatal("expected error for missing data")
 	}
 }
+
+func TestParsePush_RejectsMissingAccountID(t *testing.T) {
+	payload := map[string]any{
+		"message": map[string]any{
+			"data": base64.StdEncoding.EncodeToString([]byte(`{
+				"chatEventData": {
+					"messageCreatedEventData": {
+						"message": {
+							"name": "spaces/AAA/messages/BBB",
+							"sender": {"displayName": "Alice"},
+							"text": "hi",
+							"space": {"name": "spaces/AAA", "displayName": "#eng"}
+						}
+					}
+				}
+			}`)),
+		},
+	}
+	raw, _ := json.Marshal(payload)
+	_, err := events.ParsePush(raw)
+	if err == nil {
+		t.Fatal("expected error for missing accountId")
+	}
+}

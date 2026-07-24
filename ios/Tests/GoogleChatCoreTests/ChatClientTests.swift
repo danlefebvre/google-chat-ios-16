@@ -53,6 +53,18 @@ final class ChatClientTests: XCTestCase {
         )
         XCTAssertEqual(reaction.emoji.unicode, "👍")
     }
+
+    func testMarkSpaceReadSendsUpdateMask() async throws {
+        let transport = MockHTTPTransport { request in
+            XCTAssertEqual(request.httpMethod, "PATCH")
+            XCTAssertEqual(request.url?.path, "/v1/users/me/spaces/AAA/spaceReadState")
+            let items = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?.queryItems ?? []
+            XCTAssertEqual(items.first(where: { $0.name == "updateMask" })?.value, "lastReadTime")
+            return (HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, Data())
+        }
+        let client = ChatClient(baseURL: URL(string: "https://chat.googleapis.com")!, transport: transport)
+        try await client.markSpaceRead(spaceName: "spaces/AAA", accessToken: "tok")
+    }
 }
 
 struct MockHTTPTransport: HTTPTransport, @unchecked Sendable {

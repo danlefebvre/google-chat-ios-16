@@ -66,6 +66,9 @@ func ParsePush(raw []byte) (ChatEvent, error) {
 	if env.Message.Attributes != nil {
 		accountID = env.Message.Attributes["accountId"]
 	}
+	if accountID == "" {
+		return ChatEvent{}, fmt.Errorf("missing accountId attribute")
+	}
 	return ChatEvent{
 		AccountID:   accountID,
 		SpaceName:   msg.Space.Name,

@@ -1,8 +1,8 @@
 import Foundation
 
 public protocol AccountStore: Sendable {
-    mutating func upsert(_ account: Account)
-    mutating func remove(_ id: AccountID)
+    mutating func upsert(_ account: Account) throws
+    mutating func remove(_ id: AccountID) throws
     func all() -> [Account]
     func get(_ id: AccountID) -> Account?
 }
@@ -12,11 +12,11 @@ public struct InMemoryAccountStore: AccountStore {
 
     public init() {}
 
-    public mutating func upsert(_ account: Account) {
+    public mutating func upsert(_ account: Account) throws {
         byID[account.id] = account
     }
 
-    public mutating func remove(_ id: AccountID) {
+    public mutating func remove(_ id: AccountID) throws {
         byID[id] = nil
     }
 

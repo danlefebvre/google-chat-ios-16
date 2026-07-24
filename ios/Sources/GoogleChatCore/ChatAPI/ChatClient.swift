@@ -69,7 +69,15 @@ public struct ChatClient: Sendable {
 
     public func markSpaceRead(spaceName: String, accessToken: String) async throws {
         // users.spaces.spaceReadState patch — write last read time to "now".
-        var request = URLRequest(url: url(path: "v1/users/me/\(spaceName)/spaceReadState"))
+        guard var components = URLComponents(
+            url: url(path: "v1/users/me/\(spaceName)/spaceReadState"),
+            resolvingAgainstBaseURL: false
+        ) else {
+            throw ChatClientError.invalidURL
+        }
+        components.queryItems = [URLQueryItem(name: "updateMask", value: "lastReadTime")]
+        guard let endpoint = components.url else { throw ChatClientError.invalidURL }
+        var request = URLRequest(url: endpoint)
         request.httpMethod = "PATCH"
         request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -89,7 +97,7 @@ public struct ChatClient: Sendable {
         contentType: String,
         data: Data,
         accessToken: String
-    ) async throws -> ChatAttachment {
+    ) async throws -> UploadAttachmentResponse {
         if AttachmentPolicy.shouldDownsample(byteCount: data.count, contentType: contentType),
            data.count > AttachmentPolicy.maxThumbnailBytes * 8 {
             // Callers should downsample before upload on device; still allow API path.

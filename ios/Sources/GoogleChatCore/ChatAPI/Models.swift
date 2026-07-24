@@ -62,6 +62,25 @@ public struct ChatAttachment: Codable, Hashable, Sendable, Identifiable {
     }
 }
 
+/// Reference returned by `media.upload` / `spaces.attachments` upload.
+public struct AttachmentDataRef: Codable, Hashable, Sendable {
+    public let resourceName: String?
+    public let attachmentUploadToken: String?
+
+    public init(resourceName: String? = nil, attachmentUploadToken: String? = nil) {
+        self.resourceName = resourceName
+        self.attachmentUploadToken = attachmentUploadToken
+    }
+}
+
+public struct UploadAttachmentResponse: Codable, Sendable {
+    public let attachmentDataRef: AttachmentDataRef
+
+    public init(attachmentDataRef: AttachmentDataRef) {
+        self.attachmentDataRef = attachmentDataRef
+    }
+}
+
 public struct ChatMessage: Codable, Hashable, Sendable, Identifiable {
     public var id: String { name }
     public let name: String
@@ -97,6 +116,22 @@ public struct MessageListResponse: Codable, Sendable {
     public init(messages: [ChatMessage], nextPageToken: String? = nil) {
         self.messages = messages
         self.nextPageToken = nextPageToken
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        messages = try container.decodeIfPresent([ChatMessage].self, forKey: .messages) ?? []
+        nextPageToken = try container.decodeIfPresent(String.self, forKey: .nextPageToken)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(messages, forKey: .messages)
+        try container.encodeIfPresent(nextPageToken, forKey: .nextPageToken)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case messages, nextPageToken
     }
 }
 

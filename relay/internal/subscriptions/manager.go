@@ -80,11 +80,12 @@ func (m *Manager) RefreshDue() (int, error) {
 
 // DeleteSubscription deletes a remote subscription and drops local tracking.
 func (m *Manager) DeleteSubscription(name string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	if err := m.api.Delete(name); err != nil {
 		return err
 	}
-	m.mu.Lock()
-	defer m.mu.Unlock()
 	for id, sub := range m.byAccount {
 		if sub.Name == name {
 			delete(m.byAccount, id)

@@ -12,19 +12,20 @@ final class MediaClientTests: XCTestCase {
             XCTAssertTrue(request.url!.absoluteString.contains("uploadType=multipart"))
             XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer tok")
             let body = """
-            {"name":"spaces/AAA/messages/1/attachments/1","contentName":"shot.png","contentType":"image/png"}
+            {"attachmentDataRef":{"resourceName":"spaces/AAA/attachments/xyz","attachmentUploadToken":"tok-upload"}}
             """.data(using: .utf8)!
             return (HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, body)
         }
         let client = ChatClient(baseURL: URL(string: "https://chat.googleapis.com")!, transport: transport)
-        let attachment = try await client.uploadAttachment(
+        let uploaded = try await client.uploadAttachment(
             spaceName: "spaces/AAA",
             fileName: "shot.png",
             contentType: "image/png",
             data: Data(repeating: 1, count: 16),
             accessToken: "tok"
         )
-        XCTAssertEqual(attachment.contentName, "shot.png")
+        XCTAssertEqual(uploaded.attachmentDataRef.resourceName, "spaces/AAA/attachments/xyz")
+        XCTAssertEqual(uploaded.attachmentDataRef.attachmentUploadToken, "tok-upload")
     }
 
     func testDownloadAttachmentReturnsBytes() async throws {

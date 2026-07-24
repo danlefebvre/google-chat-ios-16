@@ -2,11 +2,11 @@ import XCTest
 @testable import GoogleChatCore
 
 final class SyncUpsertTests: XCTestCase {
-    func testUpsertReplacesByConversationID() {
+    func testUpsertReplacesByConversationID() throws {
         let account = AccountID(issuer: "https://accounts.google.com", subject: "work")
         let id = ConversationID(accountID: account, spaceName: "spaces/AAA")
         var store = InMemoryConversationStore()
-        store.upsert([
+        try store.upsert([
             Conversation(
                 id: id,
                 title: "Old",
@@ -17,7 +17,7 @@ final class SyncUpsertTests: XCTestCase {
                 badgeColorHex: "#3366FF"
             )
         ])
-        store.upsert([
+        try store.upsert([
             Conversation(
                 id: id,
                 title: "New",
@@ -36,11 +36,11 @@ final class SyncUpsertTests: XCTestCase {
         XCTAssertFalse(all[0].unread)
     }
 
-    func testRemoveAccountWipesOnlyThatAccountsRows() {
+    func testRemoveAccountWipesOnlyThatAccountsRows() throws {
         let work = AccountID(issuer: "https://accounts.google.com", subject: "work")
         let home = AccountID(issuer: "https://accounts.google.com", subject: "home")
         var store = InMemoryConversationStore()
-        store.upsert([
+        try store.upsert([
             Conversation(
                 id: ConversationID(accountID: work, spaceName: "spaces/1"),
                 title: "W",
@@ -60,7 +60,7 @@ final class SyncUpsertTests: XCTestCase {
                 badgeColorHex: "#2E8B57"
             ),
         ])
-        store.removeAll(for: work)
+        try store.removeAll(for: work)
         XCTAssertEqual(store.all().map(\.title), ["H"])
     }
 }

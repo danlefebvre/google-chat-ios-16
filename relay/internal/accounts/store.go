@@ -23,7 +23,7 @@ type Store interface {
 	List() []Account
 }
 
-// MemoryStore is an in-memory Store for tests and single-instance deploys.
+// MemoryStore is an in-memory Store for tests and explicit local-dev mode.
 type MemoryStore struct {
 	mu   sync.RWMutex
 	byID map[string]Account

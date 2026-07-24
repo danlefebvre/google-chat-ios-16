@@ -11,9 +11,11 @@ struct RootView: View {
                 }
         }
         .task {
-            if appModel.conversations.isEmpty {
+            #if DEBUG
+            if appModel.accounts.isEmpty && appModel.conversations.isEmpty {
                 appModel.bootstrapPreviewData()
             }
+            #endif
         }
         .overlay(alignment: .top) {
             if let banner = appModel.banner {

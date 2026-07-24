@@ -18,7 +18,7 @@ struct AccountManagerView: View {
                         Spacer()
                         Button("Remove", role: .destructive) {
                             // Relay teardown must run before device wipe (client calls relay DELETE first).
-                            appModel.removeAccount(account.id)
+                            Task { await appModel.removeAccount(account.id) }
                         }
                     }
                 }

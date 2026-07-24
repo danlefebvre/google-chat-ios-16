@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 )
 
 // Notification is a publish payload for ntfy.
@@ -25,7 +26,7 @@ type Client struct {
 // NewClient builds an ntfy client. baseURL is typically https://ntfy.sh.
 func NewClient(baseURL, topic, accessToken string, httpClient *http.Client) *Client {
 	if httpClient == nil {
-		httpClient = http.DefaultClient
+		httpClient = &http.Client{Timeout: 10 * time.Second}
 	}
 	return &Client{
 		baseURL:     strings.TrimRight(baseURL, "/"),

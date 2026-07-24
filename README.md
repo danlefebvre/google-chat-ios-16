@@ -36,12 +36,14 @@ See **[docs/PLAN.md](docs/PLAN.md)** for the full product/technical plan.
 ./scripts/test-all.sh
 
 # Relay only
-cd relay && go test ./...
+(cd relay && go test ./...)
+# Terminal 1:
 NTFY_TOPIC=your-secret-topic ./scripts/run-relay.sh
+# Terminal 2, from the repository root:
 ./scripts/phase0-smoke.sh
 
 # iOS domain tests
-cd ios && swift test
+(cd ios && swift test)
 # On macOS: brew install xcodegen && cd ios && xcodegen generate && open GoogleChatMulti.xcodeproj
 ```
 

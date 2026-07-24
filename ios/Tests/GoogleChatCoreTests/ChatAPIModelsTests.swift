@@ -51,4 +51,25 @@ final class ChatAPIModelsTests: XCTestCase {
         XCTAssertEqual(page.messages[0].text, "deploy looks good")
         XCTAssertEqual(page.messages[0].attachments?.first?.contentName, "shot.png")
     }
+
+    func testDecodeEmptyMessageListObject() throws {
+        let json = "{}".data(using: .utf8)!
+        let page = try ChatJSON.makeDecoder().decode(MessageListResponse.self, from: json)
+        XCTAssertEqual(page.messages.count, 0)
+        XCTAssertNil(page.nextPageToken)
+    }
+
+    func testDecodeUploadAttachmentResponse() throws {
+        let json = """
+        {
+          "attachmentDataRef": {
+            "resourceName": "spaces/AAA/attachments/xyz",
+            "attachmentUploadToken": "upload-tok"
+          }
+        }
+        """.data(using: .utf8)!
+        let resp = try ChatJSON.makeDecoder().decode(UploadAttachmentResponse.self, from: json)
+        XCTAssertEqual(resp.attachmentDataRef.resourceName, "spaces/AAA/attachments/xyz")
+        XCTAssertEqual(resp.attachmentDataRef.attachmentUploadToken, "upload-tok")
+    }
 }

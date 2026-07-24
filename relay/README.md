@@ -20,6 +20,10 @@ MVP relay that turns Google Workspace Events (via Pub/Sub push) into **ntfy.sh**
 | `NTFY_TOPIC` | for publish | — | Hard-to-guess topic |
 | `NTFY_ACCESS_TOKEN` | recommended | — | Bearer token for ntfy |
 | `QUIET_HOURS` | no | — | `HH:MM-HH:MM` UTC, e.g. `22:00-07:00` |
+| `ACCOUNT_STORE` | no | — | Set to `memory` for explicit local-dev in-memory store |
+| `ACCOUNT_STORE_PATH` | deploy | — | JSON path for durable encrypted account store |
+| `ACCOUNT_STORE_KEY` | deploy | — | 32-byte key as 64 hex chars (AES-GCM) |
+| `RELAY_API_TOKEN` | recommended | — | When set, mutating routes require `Authorization: Bearer …` |
 
 ## Local
 

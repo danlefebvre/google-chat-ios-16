@@ -21,4 +21,11 @@ final class DeepLinkTests: XCTestCase {
         XCTAssertEqual(items.first(where: { $0.name == "account" })?.value, account.key)
         XCTAssertEqual(items.first(where: { $0.name == "space" })?.value, "spaces/AAA")
     }
+
+    func testParseRejectsEmptySpaceParameter() {
+        let url = URL(string: "googlechatmulti://space?account=https%3A%2F%2Faccounts.google.com%7Cwork&space=")!
+        XCTAssertThrowsError(try DeepLink.parse(url)) { error in
+            XCTAssertEqual(error as? DeepLinkError, .missingParameters)
+        }
+    }
 }

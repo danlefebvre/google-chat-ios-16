@@ -29,7 +29,8 @@ public enum DeepLink: Hashable, Sendable {
         let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
         let account = items.first(where: { $0.name == "account" })?.value
         let space = items.first(where: { $0.name == "space" })?.value
-        guard let account, let space, let accountID = try? AccountID(key: account) else {
+        guard let account, let space, !space.isEmpty,
+              let accountID = try? AccountID(key: account) else {
             throw DeepLinkError.missingParameters
         }
         return .space(accountID: accountID, spaceName: space)

@@ -19,7 +19,7 @@ final class JSONFileConversationStoreTests: XCTestCase {
         )
 
         var store = try JSONFileConversationStore(fileURL: url)
-        store.upsert([convo])
+        try store.upsert([convo])
 
         let reopened = try JSONFileConversationStore(fileURL: url)
         XCTAssertEqual(reopened.all().map(\.title), ["#eng"])
