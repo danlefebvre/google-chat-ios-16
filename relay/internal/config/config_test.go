@@ -30,6 +30,30 @@ func TestLoad_RequiresTopicInProductionMode(t *testing.T) {
 	}
 }
 
+func TestLoad_RequiresAPITokenInProductionMode(t *testing.T) {
+	t.Parallel()
+	_, err := config.Load(map[string]string{
+		"RELAY_ENV":  "production",
+		"NTFY_TOPIC": "topic",
+	})
+	if err == nil {
+		t.Fatal("expected error when RELAY_API_TOKEN missing in production")
+	}
+}
+
+func TestLoad_QuietHoursTimezone(t *testing.T) {
+	t.Parallel()
+	cfg, err := config.Load(map[string]string{
+		"QUIET_HOURS_TZ": "America/New_York",
+	})
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.QuietHoursLocation == nil || cfg.QuietHoursLocation.String() != "America/New_York" {
+		t.Fatalf("QuietHoursLocation = %v", cfg.QuietHoursLocation)
+	}
+}
+
 func TestLoad_ReadsSecrets(t *testing.T) {
 	t.Parallel()
 	cfg, err := config.Load(map[string]string{
@@ -39,6 +63,7 @@ func TestLoad_ReadsSecrets(t *testing.T) {
 		"NTFY_ACCESS_TOKEN":    "tok",
 		"QUIET_HOURS_START":    "22",
 		"QUIET_HOURS_END":      "7",
+		"RELAY_API_TOKEN":      "relay-secret",
 		"TOKEN_ENCRYPTION_KEY": "0123456789abcdef0123456789abcdef",
 	})
 	if err != nil {
@@ -52,5 +77,11 @@ func TestLoad_ReadsSecrets(t *testing.T) {
 	}
 	if cfg.NtfyAccessToken != "tok" {
 		t.Fatalf("token = %q", cfg.NtfyAccessToken)
+	}
+	if cfg.APIToken != "relay-secret" {
+		t.Fatalf("APIToken = %q", cfg.APIToken)
+	}
+	if cfg.QuietHoursLocation == nil || cfg.QuietHoursLocation.String() != "UTC" {
+		t.Fatalf("default QuietHoursLocation = %v", cfg.QuietHoursLocation)
 	}
 }

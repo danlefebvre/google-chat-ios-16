@@ -80,7 +80,7 @@ struct AccountManagerView: View {
         )
         do {
             try await appModel.authStore.upsert(auth)
-            let relay = RelayClient(baseURL: appModel.relayBaseURL)
+            let relay = RelayClient(baseURL: appModel.relayBaseURL, apiToken: appModel.relayAPIToken)
             try await relay.registerAccount(
                 accountID: accountID,
                 email: draftEmail,

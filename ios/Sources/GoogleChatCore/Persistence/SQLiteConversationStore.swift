@@ -2,7 +2,7 @@ import Foundation
 import CSQLite
 
 /// Lightweight SQLite offline cache (GRDB-compatible schema; no GRDB dependency required).
-public actor SQLiteConversationStore: ConversationStore, ConversationCacheWiping {
+public actor SQLiteConversationStore: ConversationStore {
     private let path: String
     private var db: OpaquePointer?
 

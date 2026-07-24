@@ -1,13 +1,13 @@
 import Foundation
 
-public protocol ConversationStore: Sendable {
+public protocol ConversationStore: ConversationCacheWiping {
     func upsertConversations(_ rows: [ConversationSummary]) async throws
     func allConversations() async throws -> [ConversationSummary]
     func upsertMessages(_ messages: [ChatMessage]) async throws
     func messages(accountID: AccountID, spaceName: String, limit: Int, before: Date?) async throws -> [ChatMessage]
 }
 
-public actor InMemoryConversationStore: ConversationStore, ConversationCacheWiping {
+public actor InMemoryConversationStore: ConversationStore {
     private var conversations: [String: ConversationSummary] = [:]
     private var messagesBySpace: [String: [ChatMessage]] = [:]
 

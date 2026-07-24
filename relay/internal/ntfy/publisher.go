@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 )
 
 // Message is a notification payload for ntfy.
@@ -28,7 +29,7 @@ type Publisher struct {
 
 func NewPublisher(baseURL, topic, token string, client *http.Client) *Publisher {
 	if client == nil {
-		client = http.DefaultClient
+		client = &http.Client{Timeout: 15 * time.Second}
 	}
 	return &Publisher{
 		baseURL: strings.TrimRight(baseURL, "/"),

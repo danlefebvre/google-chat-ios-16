@@ -39,9 +39,8 @@ type Handler struct {
 	mutes  *mute.Store
 	quiet  quiet.Hours
 	loc    *time.Location
-	Retry  RetryPolicy
-	now    func() time.Time
-	sleep  func(time.Duration)
+	Retry RetryPolicy
+	now   func() time.Time
 }
 
 func NewHandler(pub Publisher, mutes *mute.Store, qh quiet.Hours, loc *time.Location) *Handler {
@@ -58,7 +57,6 @@ func NewHandler(pub Publisher, mutes *mute.Store, qh quiet.Hours, loc *time.Loca
 		loc:   loc,
 		Retry: RetryPolicy{Attempts: 3, Backoff: 200 * time.Millisecond},
 		now:   time.Now,
-		sleep: time.Sleep,
 	}
 }
 
@@ -97,14 +95,33 @@ func (h *Handler) Handle(ctx context.Context, in Incoming) error {
 	}
 	var lastErr error
 	for i := 0; i < attempts; i++ {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		if err := h.pub.Publish(ctx, msg); err != nil {
 			lastErr = err
 			if i+1 < attempts {
-				h.sleep(h.Retry.Backoff)
+				if err := h.sleepCtx(ctx, h.Retry.Backoff); err != nil {
+					return err
+				}
 			}
 			continue
 		}
 		return nil
 	}
 	return fmt.Errorf("publish after %d attempts: %w", attempts, lastErr)
+}
+
+func (h *Handler) sleepCtx(ctx context.Context, d time.Duration) error {
+	if d <= 0 {
+		return ctx.Err()
+	}
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
 }

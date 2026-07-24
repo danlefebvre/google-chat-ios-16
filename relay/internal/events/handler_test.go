@@ -124,6 +124,29 @@ func TestHandler_RetriesFailedPublish(t *testing.T) {
 	}
 }
 
+func TestHandler_StopsRetryWhenContextCanceled(t *testing.T) {
+	t.Parallel()
+
+	pub := &capturePublisher{err: context.DeadlineExceeded}
+	h := events.NewHandler(pub, mute.NewStore(), quiet.Hours{}, time.UTC)
+	h.Retry = events.RetryPolicy{Attempts: 5, Backoff: 50 * time.Millisecond}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	err := h.Handle(ctx, events.Incoming{
+		AccountID:  "a",
+		SpaceName:  "spaces/X",
+		SpaceTitle: "Cancel",
+		Text:       "ping",
+		OccurredAt: time.Now().UTC(),
+	})
+	if err == nil {
+		t.Fatal("expected context error")
+	}
+	if err != context.Canceled {
+		t.Fatalf("err = %v, want context.Canceled", err)
+	}
+}
+
 func TestParsePubSubPush_DecodesChatMessage(t *testing.T) {
 	t.Parallel()
 

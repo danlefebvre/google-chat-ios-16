@@ -56,11 +56,13 @@ func TestManualPublish(t *testing.T) {
 		Mutes:    mutes,
 		Handler:  events.NewHandler(pub, mutes, quiet.Hours{}, time.UTC),
 		Publisher: pub,
+		APIToken: "secret",
 	})
 
 	body := `{"title":"[Work] test","body":"Alice: hello"}`
 	req := httptest.NewRequest(http.MethodPost, "/v1/notify/test", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer secret")
 	w := httptest.NewRecorder()
 	srv.Handler.ServeHTTP(w, req)
 	if w.Code != http.StatusOK {
@@ -68,6 +70,39 @@ func TestManualPublish(t *testing.T) {
 	}
 	if gotTitle != "[Work] test" || gotBody != "Alice: hello" {
 		t.Fatalf("title=%q body=%q", gotTitle, gotBody)
+	}
+}
+
+func TestManagementRoutesRequireAuth(t *testing.T) {
+	t.Parallel()
+	srv := httpserver.New(httpserver.Deps{
+		Accounts: accounts.NewMemoryStore(),
+		Mutes:    mute.NewStore(),
+		Handler:  events.NewHandler(&noopPub{}, mute.NewStore(), quiet.Hours{}, time.UTC),
+		APIToken: "secret",
+	})
+	req := httptest.NewRequest(http.MethodGet, "/v1/accounts", nil)
+	w := httptest.NewRecorder()
+	srv.Handler.ServeHTTP(w, req)
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want 401", w.Code)
+	}
+}
+
+func TestPubSubPushRejectsOversizedBody(t *testing.T) {
+	t.Parallel()
+	srv := httpserver.New(httpserver.Deps{
+		Accounts:          accounts.NewMemoryStore(),
+		Mutes:             mute.NewStore(),
+		Handler:           events.NewHandler(&noopPub{}, mute.NewStore(), quiet.Hours{}, time.UTC),
+		PubSubVerifyToken: "verify-me",
+	})
+	huge := bytes.Repeat([]byte("a"), (1<<20)+10)
+	req := httptest.NewRequest(http.MethodPost, "/v1/pubsub/push?token=verify-me", bytes.NewReader(huge))
+	w := httptest.NewRecorder()
+	srv.Handler.ServeHTTP(w, req)
+	if w.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("status = %d, want 413", w.Code)
 	}
 }
 

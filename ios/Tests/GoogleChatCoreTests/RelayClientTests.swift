@@ -9,6 +9,7 @@ final class RelayClientTests: XCTestCase {
         MockURLProtocol.requestHandler = { request in
             XCTAssertEqual(request.httpMethod, "POST")
             XCTAssertTrue(request.url?.path.hasSuffix("/v1/accounts") == true)
+            XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer relay-secret")
             let body = try XCTUnwrap(request.httpBody ?? Data())
             let obj = try JSONSerialization.jsonObject(with: body) as! [String: Any]
             XCTAssertEqual(obj["id"] as? String, "iss|work")
@@ -18,7 +19,11 @@ final class RelayClientTests: XCTestCase {
         }
         let config = URLSessionConfiguration.ephemeral
         config.protocolClasses = [MockURLProtocol.self]
-        let client = RelayClient(baseURL: URL(string: "https://relay.example")!, session: URLSession(configuration: config))
+        let client = RelayClient(
+            baseURL: URL(string: "https://relay.example")!,
+            session: URLSession(configuration: config),
+            apiToken: "relay-secret"
+        )
         try await client.registerAccount(
             accountID: AccountID(issuer: "iss", subject: "work"),
             email: "w@ex.com",

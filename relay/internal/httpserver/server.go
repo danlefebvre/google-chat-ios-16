@@ -2,7 +2,9 @@ package httpserver
 
 import (
 	"context"
+	"crypto/subtle"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"strings"
@@ -12,6 +14,8 @@ import (
 	"github.com/danlefebvre/google-chat-ios-16/relay/internal/mute"
 	"github.com/danlefebvre/google-chat-ios-16/relay/internal/ntfy"
 )
+
+const maxPubSubBodyBytes = 1 << 20 // 1 MiB
 
 // Publisher is the ntfy publisher interface.
 type Publisher interface {
@@ -26,6 +30,7 @@ type Deps struct {
 	Publisher         Publisher
 	Teardown          accounts.Teardown
 	PubSubVerifyToken string
+	APIToken          string
 }
 
 // Server is the relay HTTP API.
@@ -38,13 +43,35 @@ func New(deps Deps) *Server {
 	s := &Server{deps: deps}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", s.handleHealth)
-	mux.HandleFunc("/v1/notify/test", s.handleTestNotify)
+	mux.HandleFunc("/v1/notify/test", s.requireAPIAuth(s.handleTestNotify))
 	mux.HandleFunc("/v1/pubsub/push", s.handlePubSubPush)
-	mux.HandleFunc("/v1/accounts/", s.handleAccounts)
-	mux.HandleFunc("/v1/accounts", s.handleAccountsCollection)
-	mux.HandleFunc("/v1/mutes", s.handleMutes)
+	mux.HandleFunc("/v1/accounts/", s.requireAPIAuth(s.handleAccounts))
+	mux.HandleFunc("/v1/accounts", s.requireAPIAuth(s.handleAccountsCollection))
+	mux.HandleFunc("/v1/mutes", s.requireAPIAuth(s.handleMutes))
 	s.Handler = mux
 	return s
+}
+
+func (s *Server) requireAPIAuth(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if s.deps.APIToken != "" && !authorized(r, s.deps.APIToken) {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		next(w, r)
+	}
+}
+
+func authorized(r *http.Request, token string) bool {
+	auth := r.Header.Get("Authorization")
+	if strings.HasPrefix(auth, "Bearer ") &&
+		subtle.ConstantTimeCompare([]byte(strings.TrimPrefix(auth, "Bearer ")), []byte(token)) == 1 {
+		return true
+	}
+	if subtle.ConstantTimeCompare([]byte(r.Header.Get("X-Relay-Token")), []byte(token)) == 1 {
+		return true
+	}
+	return false
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
@@ -96,8 +123,14 @@ func (s *Server) handlePubSubPush(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
+	r.Body = http.MaxBytesReader(w, r.Body, maxPubSubBodyBytes)
 	raw, err := io.ReadAll(r.Body)
 	if err != nil {
+		var maxBytesErr *http.MaxBytesError
+		if errors.As(err, &maxBytesErr) {
+			http.Error(w, "request entity too large", http.StatusRequestEntityTooLarge)
+			return
+		}
 		http.Error(w, "read body", http.StatusBadRequest)
 		return
 	}

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -28,20 +29,40 @@ func main() {
 	if cfg.NtfyTopic == "" {
 		log.Printf("warning: NTFY_TOPIC empty; /v1/notify/test will fail until set")
 	}
+	if cfg.APIToken == "" {
+		log.Printf("warning: RELAY_API_TOKEN empty; management routes are unauthenticated")
+	}
 
 	store := accounts.NewMemoryStore()
 	mutes := mute.NewStore()
 	pub := ntfy.NewPublisher(cfg.NtfyBaseURL, cfg.NtfyTopic, cfg.NtfyAccessToken, nil)
-	handler := events.NewHandler(pub, mutes, cfg.QuietHours, time.Local)
+	handler := events.NewHandler(pub, mutes, cfg.QuietHours, cfg.QuietHoursLocation)
 	gclient := googleapi.New("", nil)
 
 	teardown := accounts.Teardown{
 		Store: store,
 		DeleteSubscription: func(ctx context.Context, name string) error {
-			// Access token exchange is environment-specific; log and best-effort delete with empty token fails closed via API.
-			log.Printf("teardown: delete subscription %s (configure access token exchange for full delete)", name)
-			_ = gclient
-			return nil
+			if name == "" {
+				return nil
+			}
+			if cfg.GoogleClientID == "" || cfg.GoogleClientSecret == "" {
+				return fmt.Errorf("delete subscription %s: GOOGLE_CLIENT_ID/SECRET not configured", name)
+			}
+			refresh := ""
+			for _, acc := range store.List(ctx) {
+				if acc.SubscriptionName == name {
+					refresh = acc.RefreshToken
+					break
+				}
+			}
+			if refresh == "" {
+				return fmt.Errorf("delete subscription %s: refresh token not found", name)
+			}
+			accessToken, err := gclient.ExchangeRefreshToken(ctx, cfg.GoogleClientID, cfg.GoogleClientSecret, refresh)
+			if err != nil {
+				return fmt.Errorf("delete subscription token exchange: %w", err)
+			}
+			return gclient.DeleteSubscription(ctx, cfg.EventsBaseURL, accessToken, name)
 		},
 		RevokeRefreshToken: func(ctx context.Context, token string) error {
 			return gclient.RevokeRefreshToken(ctx, token)
@@ -60,9 +81,8 @@ func main() {
 		Store:       store,
 		RenewWithin: 24 * time.Hour,
 		Renew: func(ctx context.Context, accountID, subscriptionName string) (string, time.Time, error) {
-			// Placeholder: real renew calls Workspace Events API with a refreshed access token.
-			log.Printf("subscription renew stub for %s (%s)", accountID, subscriptionName)
-			return subscriptionName, time.Now().UTC().Add(7 * 24 * time.Hour), nil
+			// Fail closed until Workspace Events renew (LRO) is fully wired.
+			return "", time.Time{}, fmt.Errorf("subscription renew not implemented for %s (%s)", accountID, subscriptionName)
 		},
 		OnRenewFailure: func(ctx context.Context, account accounts.Account, err error) {
 			_ = pub.Publish(ctx, ntfy.Message{
@@ -80,9 +100,17 @@ func main() {
 		Publisher:         pub,
 		Teardown:          teardown,
 		PubSubVerifyToken: cfg.PubSubVerifyToken,
+		APIToken:          cfg.APIToken,
 	})
 
-	httpSrv := &http.Server{Addr: cfg.HTTPAddr, Handler: srv.Handler}
+	httpSrv := &http.Server{
+		Addr:              cfg.HTTPAddr,
+		Handler:           srv.Handler,
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       10 * time.Second,
+		WriteTimeout:      15 * time.Second,
+		IdleTimeout:       60 * time.Second,
+	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
@@ -103,7 +131,7 @@ func main() {
 	}()
 
 	go func() {
-		log.Printf("relay listening on %s (ntfy=%s/%s)", cfg.HTTPAddr, cfg.NtfyBaseURL, cfg.NtfyTopic)
+		log.Printf("relay listening on %s (ntfy base=%s)", cfg.HTTPAddr, cfg.NtfyBaseURL)
 		if err := httpSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("listen: %v", err)
 		}

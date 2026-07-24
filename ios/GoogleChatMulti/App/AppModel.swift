@@ -15,6 +15,7 @@ final class AppModel: ObservableObject {
     let authStore: AuthStore
     let conversationStore: ConversationStore
     let relayBaseURL: URL
+    let relayAPIToken: String
     private var foregroundPollTask: Task<Void, Never>?
 
     enum AppRoute: Hashable {
@@ -25,7 +26,8 @@ final class AppModel: ObservableObject {
     init(
         authStore: AuthStore? = nil,
         conversationStore: ConversationStore? = nil,
-        relayBaseURL: URL = URL(string: ProcessInfo.processInfo.environment["RELAY_BASE_URL"] ?? "http://127.0.0.1:8080")!
+        relayBaseURL: URL = URL(string: ProcessInfo.processInfo.environment["RELAY_BASE_URL"] ?? "http://127.0.0.1:8080")!,
+        relayAPIToken: String = ProcessInfo.processInfo.environment["RELAY_API_TOKEN"] ?? ""
     ) {
         #if os(iOS)
         self.authStore = authStore ?? KeychainAuthStore()
@@ -42,6 +44,7 @@ final class AppModel: ObservableObject {
             self.conversationStore = (try? SQLiteConversationStore(path: path)) ?? InMemoryConversationStore()
         }
         self.relayBaseURL = relayBaseURL
+        self.relayAPIToken = relayAPIToken
     }
 
     var visibleConversations: [ConversationSummary] {
@@ -96,7 +99,7 @@ final class AppModel: ObservableObject {
     }
 
     func removeAccount(_ accountID: AccountID) async {
-        let relay = RelayClient(baseURL: relayBaseURL)
+        let relay = RelayClient(baseURL: relayBaseURL, apiToken: relayAPIToken)
         let coordinator = AccountRemovalCoordinator(
             relay: relay,
             authStore: authStore,

@@ -14,18 +14,23 @@ public struct AccountSync: Sendable {
     }
 
     public func syncSpaces(accountID: AccountID) async throws {
+        let existing = Dictionary(
+            uniqueKeysWithValues: try await store.allConversations().map { ($0.compositeID, $0) }
+        )
         var token: String? = nil
         repeat {
             let page = try await client.listSpaces(pageToken: token, pageSize: pageSize)
             let rows = page.spaces.map { space in
-                ConversationSummary(
+                let compositeID = "\(accountID.rawValue):\(space.name)"
+                let previous = existing[compositeID]
+                return ConversationSummary(
                     accountID: accountID,
                     accountLabel: accountLabel,
                     spaceName: space.name,
                     title: space.resolvedTitle,
-                    lastMessagePreview: "",
-                    lastActivityAt: Date.distantPast,
-                    unreadCount: 0,
+                    lastMessagePreview: previous?.lastMessagePreview ?? "",
+                    lastActivityAt: previous?.lastActivityAt ?? Date.distantPast,
+                    unreadCount: previous?.unreadCount ?? 0,
                     isDM: space.isDirectMessage
                 )
             }
@@ -37,6 +42,14 @@ public struct AccountSync: Sendable {
     public func syncMessages(accountID: AccountID, spaceName: String, maxPages: Int = 3) async throws {
         var token: String? = nil
         var pages = 0
+        var bestActivity = Date.distantPast
+        var bestPreview = ""
+        // Prefer any previously synced activity so older pages cannot clobber it.
+        let compositeID = "\(accountID.rawValue):\(spaceName)"
+        if let previous = try await store.allConversations().first(where: { $0.compositeID == compositeID }) {
+            bestActivity = previous.lastActivityAt
+            bestPreview = previous.lastMessagePreview
+        }
         repeat {
             let page = try await client.listMessages(spaceName: spaceName, pageToken: token, pageSize: pageSize)
             let stamped = page.messages.map { msg in
@@ -46,16 +59,18 @@ public struct AccountSync: Sendable {
                 return copy
             }
             try await store.upsertMessages(stamped)
-            if let newest = stamped.max(by: { $0.createTime < $1.createTime }) {
-                let preview = "\(newest.senderDisplayName): \(newest.text)"
+            if let newest = stamped.max(by: { $0.createTime < $1.createTime }),
+               newest.createTime >= bestActivity {
+                bestActivity = newest.createTime
+                bestPreview = String("\(newest.senderDisplayName): \(newest.text)".prefix(160))
                 try await store.upsertConversations([
                     ConversationSummary(
                         accountID: accountID,
                         accountLabel: accountLabel,
                         spaceName: spaceName,
                         title: spaceName,
-                        lastMessagePreview: String(preview.prefix(160)),
-                        lastActivityAt: newest.createTime,
+                        lastMessagePreview: bestPreview,
+                        lastActivityAt: bestActivity,
                         unreadCount: 0,
                         isDM: false
                     ),

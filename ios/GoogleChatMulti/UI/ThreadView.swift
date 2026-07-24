@@ -1,5 +1,4 @@
 import SwiftUI
-import PhotosUI
 import GoogleChatCore
 
 struct ThreadView: View {
@@ -13,10 +12,7 @@ struct ThreadView: View {
     @State private var messages: [ChatMessage] = []
     @State private var draft: String = ""
     @State private var isSending = false
-    @State private var pickerItem: PhotosPickerItem?
     @State private var status: String?
-
-    private let attachmentPolicy = AttachmentMemoryPolicy.iPhone8
 
     var body: some View {
         VStack(spacing: 0) {
@@ -47,10 +43,6 @@ struct ThreadView: View {
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
         .task { await load() }
-        .onChange(of: pickerItem) { item in
-            guard let item else { return }
-            Task { await uploadPicked(item) }
-        }
     }
 
     private var accountBanner: some View {
@@ -69,10 +61,11 @@ struct ThreadView: View {
 
     private var composer: some View {
         HStack(alignment: .bottom, spacing: 8) {
-            PhotosPicker(selection: $pickerItem, matching: .any(of: [.images, .item])) {
-                Image(systemName: "paperclip")
-            }
-            .accessibilityLabel("Attach")
+            // Attachment picker disabled until Chat media upload is wired; avoid implying a send succeeded.
+            Image(systemName: "paperclip")
+                .foregroundStyle(.tertiary)
+                .accessibilityLabel("Attachments unavailable")
+                .accessibilityHint("Media upload is not enabled yet")
 
             TextField("Message", text: $draft, axis: .vertical)
                 .textFieldStyle(.roundedBorder)
@@ -149,13 +142,6 @@ struct ThreadView: View {
         } catch {
             status = error.localizedDescription
         }
-    }
-
-    private func uploadPicked(_ item: PhotosPickerItem) async {
-        status = "Attachment selected (upload uses Chat media API; max thumb \(attachmentPolicy.maxThumbnailEdge)px)"
-        pickerItem = nil
-        // Full media upload requires Google Chat media endpoints + multipart; wired as next integration step.
-        _ = attachmentPolicy.maxConcurrentDecodes
     }
 }
 
