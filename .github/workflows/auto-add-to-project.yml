@@ -1,0 +1,27 @@
+name: Auto-add to project
+
+on:
+  issues:
+    types:
+      - opened
+      - reopened
+      - transferred
+      - labeled
+  pull_request:
+    types:
+      - opened
+      - reopened
+      - labeled
+
+jobs:
+  add-to-project:
+    name: Add open issue or pull request to project
+    if: ${{ github.event.issue.state == 'open' || github.event.pull_request.state == 'open' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/add-to-project@v2
+        with:
+          project-url: https://github.com/users/danlefebvre/projects/60
+          github-token: ${{ secrets.ADD_TO_PROJECT_PAT }}
