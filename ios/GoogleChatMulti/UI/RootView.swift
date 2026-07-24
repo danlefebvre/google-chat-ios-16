@@ -27,7 +27,7 @@ struct RootView: View {
                     .foregroundStyle(Color("BannerText"))
                     .transition(.move(edge: .top).combined(with: .opacity))
                     .onTapGesture { model.banner = nil }
-                    .task {
+                    .task(id: banner) {
                         try? await Task.sleep(nanoseconds: 4_000_000_000)
                         model.banner = nil
                     }
