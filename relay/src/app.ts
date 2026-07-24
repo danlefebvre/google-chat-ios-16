@@ -1,4 +1,5 @@
 import express, { type Express, type Request, type Response } from "express";
+import helmet from "helmet";
 import { AccountService } from "./accounts.js";
 import { createTokenCrypto } from "./crypto.js";
 import {
@@ -50,6 +51,7 @@ function bearerToken(req: Request): string {
 
 export function createApp(options: CreateAppOptions): Express {
   const app = express();
+  app.use(helmet());
   app.use(express.json({ limit: "1mb" }));
 
   const publisher = new NtfyPublisher(options.ntfy);
