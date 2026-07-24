@@ -18,7 +18,8 @@ export type CreateAppOptions = {
   ntfy: NtfyConfig;
   adminToken: string;
   deepLinkScheme?: string;
-  tokenSecret?: string;
+  /** Required; tests pass an explicit secret (never hardcode in production). */
+  tokenSecret: string;
   /** When set, `/pubsub/push` requires matching `?token=` (or `X-Goog-Channel-Token`). */
   pubsubVerifyToken?: string;
   eventsClient?: EventsClient;
@@ -55,7 +56,10 @@ export function createApp(options: CreateAppOptions): Express {
   app.use(express.json({ limit: "1mb" }));
 
   const publisher = new NtfyPublisher(options.ntfy);
-  const crypto = createTokenCrypto(options.tokenSecret ?? "test-token-secret-32");
+  if (!options.tokenSecret) {
+    throw new Error("tokenSecret is required");
+  }
+  const crypto = createTokenCrypto(options.tokenSecret);
   const events =
     options.eventsClient ??
     (options.google

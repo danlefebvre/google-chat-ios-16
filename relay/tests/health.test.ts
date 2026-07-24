@@ -13,6 +13,7 @@ describe("GET /health", () => {
         accessToken: "tk",
       },
       adminToken: "admin-secret",
+      tokenSecret: "test-token-secret-32",
     });
 
     const res = await request(app).get("/health");

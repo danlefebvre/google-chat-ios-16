@@ -43,6 +43,7 @@ describe("POST /pubsub/push", () => {
         accessToken: "tk",
       },
       adminToken: "admin-secret",
+      tokenSecret: "test-token-secret-32",
       deepLinkScheme: "googlechatmulti",
     });
 
@@ -102,6 +103,7 @@ describe("POST /pubsub/push", () => {
         accessToken: "tk",
       },
       adminToken: "admin-secret",
+      tokenSecret: "test-token-secret-32",
     });
 
     const res = await request(app)
@@ -139,6 +141,7 @@ describe("POST /pubsub/push", () => {
         accessToken: "tk",
       },
       adminToken: "admin-secret",
+      tokenSecret: "test-token-secret-32",
       pubsubVerifyToken: "pubsub-shared-secret",
     });
 
@@ -184,6 +187,7 @@ describe("POST /pubsub/push", () => {
         accessToken: "tk",
       },
       adminToken: "admin-secret",
+      tokenSecret: "test-token-secret-32",
       pubsubVerifyToken: "pubsub-shared-secret",
     });
 

@@ -13,6 +13,7 @@ describe("admin API", () => {
       store: new InMemoryStore(),
       ntfy: { baseUrl: "https://ntfy.sh", topic: "t", accessToken: "tk" },
       adminToken: "admin-secret",
+      tokenSecret: "test-token-secret-32",
       eventsClient: {
         createSubscription: vi.fn(),
         renewSubscription: vi.fn(),
@@ -37,6 +38,7 @@ describe("admin API", () => {
       store: new InMemoryStore(),
       ntfy: { baseUrl: "https://ntfy.sh", topic: "t", accessToken: "tk" },
       adminToken: "admin-secret",
+      tokenSecret: "test-token-secret-32",
     });
 
     const res = await request(app)
@@ -73,6 +75,7 @@ describe("admin API", () => {
         accessToken: "tk",
       },
       adminToken: "admin-secret",
+      tokenSecret: "test-token-secret-32",
     });
 
     const res = await request(app)
