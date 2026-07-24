@@ -99,6 +99,10 @@ describe("admin API", () => {
       adminToken: "admin-secret",
       eventsClient: events,
       tokenSecret: "test-token-secret-32chars!!",
+      verifyAccountOwnership: async ({ accountId, email, refreshToken }) =>
+        accountId === "iss|sub" &&
+        email === "a@b.com" &&
+        refreshToken === "rt-user",
     });
 
     const register = await request(app).post("/accounts").send({
@@ -108,6 +112,14 @@ describe("admin API", () => {
       refreshToken: "rt-user",
     });
     expect(register.status).toBe(201);
+
+    const mismatched = await request(app).post("/accounts").send({
+      accountId: "iss|other",
+      email: "a@b.com",
+      label: "Work",
+      refreshToken: "rt-user",
+    });
+    expect(mismatched.status).toBe(403);
 
     const denied = await request(app)
       .delete("/accounts/iss%7Csub")

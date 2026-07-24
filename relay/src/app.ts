@@ -1,7 +1,11 @@
 import express, { type Express, type Request, type Response } from "express";
 import { AccountService } from "./accounts.js";
 import { createTokenCrypto } from "./crypto.js";
-import { createGoogleEventsClient } from "./google.js";
+import {
+  createGoogleAccountOwnershipVerifier,
+  createGoogleEventsClient,
+  type AccountOwnershipVerifier,
+} from "./google.js";
 import { formatNtfyNotification, NtfyPublisher } from "./ntfy.js";
 import { handlePubSubPush, type PubSubPushBody } from "./pubsub.js";
 import { renewExpiringSubscriptions } from "./renewal.js";
@@ -17,6 +21,8 @@ export type CreateAppOptions = {
   /** When set, `/pubsub/push` requires matching `?token=` (or `X-Goog-Channel-Token`). */
   pubsubVerifyToken?: string;
   eventsClient?: EventsClient;
+  /** Override Google ownership checks (tests). */
+  verifyAccountOwnership?: AccountOwnershipVerifier;
   google?: {
     projectId: string;
     pubsubTopic: string;
@@ -59,6 +65,15 @@ export function createApp(options: CreateAppOptions): Express {
     events,
     crypto,
   });
+
+  const verifyAccountOwnership: AccountOwnershipVerifier | undefined =
+    options.verifyAccountOwnership ??
+    (options.google
+      ? createGoogleAccountOwnershipVerifier({
+          oauthClientId: options.google.oauthClientId,
+          oauthClientSecret: options.google.oauthClientSecret,
+        })
+      : undefined);
 
   app.get("/health", (_req, res) => {
     res.status(200).json({
@@ -107,6 +122,19 @@ export function createApp(options: CreateAppOptions): Express {
       const { accountId, email, label, refreshToken } = req.body ?? {};
       if (!accountId || !email || !label || !refreshToken) {
         res.status(400).json({ error: "missing_fields" });
+        return;
+      }
+      if (!verifyAccountOwnership) {
+        res.status(503).json({ error: "ownership_verification_unavailable" });
+        return;
+      }
+      const ownsToken = await verifyAccountOwnership({
+        accountId,
+        email,
+        refreshToken,
+      });
+      if (!ownsToken) {
+        res.status(403).json({ error: "ownership_mismatch" });
         return;
       }
       const account = await accounts.registerAccount({

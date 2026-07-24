@@ -274,6 +274,79 @@ async function refreshAccessToken(
   return body.access_token;
 }
 
+export type AccountOwnershipInput = {
+  accountId: string;
+  email: string;
+  refreshToken: string;
+};
+
+export type AccountOwnershipVerifier = (
+  input: AccountOwnershipInput,
+) => Promise<boolean>;
+
+/**
+ * Confirm a Google refresh token belongs to the claimed accountId (`issuer|sub`)
+ * and email before allowing relay registration.
+ */
+export function createGoogleAccountOwnershipVerifier(options: {
+  oauthClientId: string;
+  oauthClientSecret: string;
+  fetchImpl?: typeof fetch;
+}): AccountOwnershipVerifier {
+  const fetchImpl = options.fetchImpl ?? fetch;
+  return async (input) => {
+    try {
+      const accessToken = await refreshAccessToken(fetchImpl, {
+        clientId: options.oauthClientId,
+        clientSecret: options.oauthClientSecret,
+        refreshToken: input.refreshToken,
+      });
+      const response = await fetchImpl(
+        "https://openidconnect.googleapis.com/v1/userinfo",
+        {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        },
+      );
+      if (!response.ok) {
+        return false;
+      }
+      const profile = (await response.json()) as {
+        sub?: string;
+        email?: string;
+        iss?: string;
+      };
+      if (!profile.sub || !profile.email) {
+        return false;
+      }
+      const separator = input.accountId.indexOf("|");
+      if (separator <= 0) {
+        return false;
+      }
+      const issuer = input.accountId.slice(0, separator);
+      const subject = input.accountId.slice(separator + 1);
+      if (!subject || profile.sub !== subject) {
+        return false;
+      }
+      if (profile.email.toLowerCase() !== String(input.email).toLowerCase()) {
+        return false;
+      }
+      // Accept Google's issuer forms when present on the userinfo payload.
+      if (
+        profile.iss &&
+        profile.iss !== issuer &&
+        profile.iss !== "https://accounts.google.com" &&
+        issuer !== "https://accounts.google.com" &&
+        profile.iss !== "accounts.google.com"
+      ) {
+        return false;
+      }
+      return true;
+    } catch {
+      return false;
+    }
+  };
+}
+
 function sanitizeLabel(value: string): string {
   return value.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 63);
 }
