@@ -15,8 +15,9 @@ Google Cloud setup checklist (Phase 0+):
 4. OAuth consent screen: Testing mode; add personal + work accounts as test users
 5. Workspace admin: allowlist the OAuth client for the work domain
 6. Create Pub/Sub topic + push subscription pointing at relay /pubsub endpoint
-7. Set relay env:
-   - NTFY_TOPIC, NTFY_ACCESS_TOKEN (optional)
+7. Set relay env (current entrypoint):
+   - NTFY_TOPIC, NTFY_ACCESS_TOKEN (optional), NTFY_BASE_URL (optional), PORT (optional)
+8. Planned relay env (OAuth / Pub/Sub wiring not in entrypoint yet):
    - GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET
    - PUBSUB_TOPIC, GCP_PROJECT_ID
 

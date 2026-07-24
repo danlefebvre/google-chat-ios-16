@@ -44,4 +44,17 @@ describe("publishToNtfy", () => {
       ),
     ).rejects.toThrow(/429/);
   });
+
+  it("passes an abort timeout to fetch", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200 });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await publishToNtfy(
+      { baseUrl: "https://ntfy.sh", topic: "t", accessToken: undefined },
+      { title: "t", body: "b" },
+    );
+
+    const options = fetchMock.mock.calls[0][1];
+    expect(options.signal).toBeInstanceOf(AbortSignal);
+  });
 });

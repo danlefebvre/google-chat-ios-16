@@ -23,8 +23,8 @@ describe("formatNotification", () => {
       messageText: longText,
     });
 
-    expect(result.body.length).toBeLessThanOrEqual(210);
-    expect(result.body.endsWith("…")).toBe(true);
+    expect(result.body).toBe(`Mom: ${"a".repeat(194)}…`);
+    expect(result.body.length).toBe(200);
   });
 
   it("handles empty message text", () => {

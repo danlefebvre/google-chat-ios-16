@@ -36,6 +36,7 @@ public struct MessagePreviewFormatter: Sendable {
     public init() {}
 
     public func preview(senderName: String, text: String, maxLength: Int = 80) -> String {
+        guard maxLength > 0 else { return "" }
         let body = "\(senderName): \(text)"
         guard body.count > maxLength else { return body }
         let end = body.index(body.startIndex, offsetBy: maxLength - 1)

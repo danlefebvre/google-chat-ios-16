@@ -53,9 +53,11 @@ public struct ConversationId: Hashable, Codable, Sendable {
     }
 
     public init?(rawValue: String) {
-        guard let colon = rawValue.firstIndex(of: ":") else { return nil }
-        let accountPart = String(rawValue[..<colon])
-        let spacePart = String(rawValue[rawValue.index(after: colon)...])
+        // Split on ":spaces/" so issuer URLs like "https://accounts.google.com|sub"
+        // are not truncated at the scheme colon.
+        guard let separator = rawValue.range(of: ":spaces/") else { return nil }
+        let accountPart = String(rawValue[..<separator.lowerBound])
+        let spacePart = String(rawValue[rawValue.index(after: separator.lowerBound)...])
         guard let accountId = AccountId(rawValue: accountPart) else { return nil }
         self.accountId = accountId
         self.spaceName = spacePart

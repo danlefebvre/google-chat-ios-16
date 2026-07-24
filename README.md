@@ -33,7 +33,7 @@ docs/PLAN.md             Product & technical plan
 
 | Area | Status |
 | --- | --- |
-| Relay health + test-notify + pubsub → ntfy | Done (20 vitest tests) |
+| Relay health + test-notify + pubsub → ntfy | Done (26 vitest tests) |
 | Phase 0 scripts | Done (`scripts/`) |
 | iOS core (Auth, ChatAPI, Sync, Inbox) | Done with XCTest suite |
 | SwiftUI shell (home, thread, accounts) | Done |

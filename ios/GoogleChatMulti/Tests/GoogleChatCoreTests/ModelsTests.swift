@@ -20,4 +20,14 @@ final class ConversationIdTests: XCTestCase {
         XCTAssertEqual(conversationId.rawValue, "iss|sub:spaces/AAA")
         XCTAssertEqual(ConversationId(rawValue: conversationId.rawValue), conversationId)
     }
+
+    func testCompositeIdRoundTripWithHTTPSIssuer() {
+        let accountId = AccountId(issuer: "https://accounts.google.com", sub: "demo-1")
+        let conversationId = ConversationId(accountId: accountId, spaceName: "spaces/demo")
+        XCTAssertEqual(
+            conversationId.rawValue,
+            "https://accounts.google.com|demo-1:spaces/demo"
+        )
+        XCTAssertEqual(ConversationId(rawValue: conversationId.rawValue), conversationId)
+    }
 }

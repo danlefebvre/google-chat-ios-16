@@ -1,5 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { buildSubscriptionRequest } from "../src/workspace-events.js";
+import {
+  buildSubscriptionRequest,
+  MAX_TTL_WITH_RESOURCE_DATA_SECONDS,
+} from "../src/workspace-events.js";
 
 describe("buildSubscriptionRequest", () => {
   it("builds Workspace Events subscription for chat messages", () => {
@@ -10,11 +13,12 @@ describe("buildSubscriptionRequest", () => {
       ttlSeconds: 86400,
     });
 
-    expect(req.targetResource).toBe("//chat.googleapis.com/users/user1");
+    expect(req.targetResource).toBe("//chat.googleapis.com/spaces/-");
     expect(req.eventTypes).toContain("google.workspace.chat.message.v1.created");
     expect(req.notificationEndpoint.pubsubTopic).toBe(
       "projects/my-project/topics/chat-events",
     );
-    expect(req.ttl).toBe("86400s");
+    expect(req.payloadOptions.includeResource).toBe(true);
+    expect(req.ttl).toBe(`${MAX_TTL_WITH_RESOURCE_DATA_SECONDS}s`);
   });
 });

@@ -15,8 +15,11 @@ if [[ -n "${NTFY_ACCESS_TOKEN}" ]]; then
   HEADERS+=(-H "Authorization: Bearer ${NTFY_ACCESS_TOKEN}")
 fi
 
-echo "Publishing to ${URL}"
-HTTP_CODE=$(curl -sS -o /tmp/ntfy-response.txt -w "%{http_code}" -X POST "${HEADERS[@]}" -d "${BODY}" "${URL}")
+TMPFILE="$(mktemp)"
+trap 'rm -f "${TMPFILE}"' EXIT
+
+echo "Publishing to ${NTFY_BASE_URL%/}/<redacted-topic>"
+HTTP_CODE=$(curl -sS -o "${TMPFILE}" -w "%{http_code}" -X POST "${HEADERS[@]}" -d "${BODY}" "${URL}")
 
 if [[ "${HTTP_CODE}" -ge 200 && "${HTTP_CODE}" -lt 300 ]]; then
   echo "OK (${HTTP_CODE}) — check the ntfy app on your iPhone 8"
@@ -24,5 +27,5 @@ if [[ "${HTTP_CODE}" -ge 200 && "${HTTP_CODE}" -lt 300 ]]; then
 fi
 
 echo "FAILED (${HTTP_CODE})"
-cat /tmp/ntfy-response.txt
+cat "${TMPFILE}"
 exit 1

@@ -23,4 +23,27 @@ describe("teardownAccount", () => {
     expect(revokeToken).toHaveBeenCalledWith("rt1");
     expect(storeRemove).toHaveBeenCalledWith("issuer|sub1");
   });
+
+  it("continues credential cleanup when subscription deletion fails", async () => {
+    const deleteSubscription = vi.fn().mockRejectedValue(new Error("gone"));
+    const revokeToken = vi.fn().mockResolvedValue(undefined);
+    const storeRemove = vi.fn().mockResolvedValue(undefined);
+
+    await expect(
+      teardownAccount(
+        {
+          accountId: "issuer|sub1",
+          label: "Work",
+          refreshToken: "rt1",
+          subscriptionName: "projects/p/subscriptions/s1",
+          mutedSpaces: [],
+          muted: false,
+        },
+        { deleteSubscription, revokeToken, storeRemove },
+      ),
+    ).rejects.toThrow(AggregateError);
+
+    expect(revokeToken).toHaveBeenCalledWith("rt1");
+    expect(storeRemove).toHaveBeenCalledWith("issuer|sub1");
+  });
 });

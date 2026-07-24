@@ -13,6 +13,9 @@ export interface SubscriptionRequest {
   ttl: string;
 }
 
+/** Max TTL when includeResource is true (without domain-wide delegation). */
+export const MAX_TTL_WITH_RESOURCE_DATA_SECONDS = 4 * 60 * 60;
+
 export function extractUserId(accountId: string): string {
   const parts = accountId.split("|");
   if (parts.length < 2) {
@@ -24,14 +27,16 @@ export function extractUserId(accountId: string): string {
 export function buildSubscriptionRequest(
   input: SubscriptionRequestInput,
 ): SubscriptionRequest {
-  const userId = extractUserId(input.accountId);
+  // Message events require a Chat spaces target; `spaces/-` covers all spaces
+  // for the authorizing user. Resource data is required for ntfy previews.
+  const ttlSeconds = Math.min(input.ttlSeconds, MAX_TTL_WITH_RESOURCE_DATA_SECONDS);
 
   return {
-    targetResource: `//chat.googleapis.com/users/${userId}`,
+    targetResource: "//chat.googleapis.com/spaces/-",
     eventTypes: ["google.workspace.chat.message.v1.created"],
     notificationEndpoint: { pubsubTopic: input.pubsubTopic },
-    payloadOptions: { includeResource: false },
-    ttl: `${input.ttlSeconds}s`,
+    payloadOptions: { includeResource: true },
+    ttl: `${ttlSeconds}s`,
   };
 }
 
@@ -40,5 +45,6 @@ export async function renewSubscription(
   ttlSeconds: number,
   renewFn: (name: string, ttl: string) => Promise<void>,
 ): Promise<void> {
-  await renewFn(subscriptionName, `${ttlSeconds}s`);
+  const clamped = Math.min(ttlSeconds, MAX_TTL_WITH_RESOURCE_DATA_SECONDS);
+  await renewFn(subscriptionName, `${clamped}s`);
 }

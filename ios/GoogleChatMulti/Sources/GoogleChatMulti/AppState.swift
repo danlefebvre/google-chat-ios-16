@@ -8,6 +8,7 @@ final class AppState: ObservableObject {
     @Published var accountFilter: AccountFilter = .all
     @Published var searchQuery: String = ""
     @Published var pendingDeepLinkConversationId: ConversationId?
+    @Published var navigationPath: [ConversationId] = []
 
     private let merger = InboxMerger()
     private let upserter = ConversationUpserter()
@@ -26,6 +27,10 @@ final class AppState: ObservableObject {
     func removeAccount(_ accountId: AccountId) {
         accounts.removeAll { $0.accountId == accountId }
         conversations.removeAll { $0.conversationId.accountId == accountId }
+        if case .account(let filteredId) = accountFilter, filteredId == accountId {
+            accountFilter = .all
+        }
+        navigationPath.removeAll { $0.accountId == accountId }
     }
 
     func upsertConversations(_ incoming: [ConversationSummary]) {
@@ -33,11 +38,21 @@ final class AppState: ObservableObject {
     }
 
     func handleDeepLink(_ url: URL) {
-        guard url.scheme == "gchatmulti",
-              url.host == "space",
-              let raw = url.pathComponents.dropFirst().first,
-              let conversationId = ConversationId(rawValue: raw)
-        else { return }
+        guard url.scheme == "gchatmulti", url.host == "space" else { return }
+        let rawPath = url.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        let raw = rawPath.removingPercentEncoding ?? rawPath
+        guard let conversationId = ConversationId(rawValue: raw) else { return }
         pendingDeepLinkConversationId = conversationId
+    }
+
+    func openDeepLinkConversation(_ conversationId: ConversationId) {
+        if case .account(let filteredId) = accountFilter, filteredId != conversationId.accountId {
+            accountFilter = .all
+        }
+        searchQuery = ""
+        if navigationPath.last != conversationId {
+            navigationPath.append(conversationId)
+        }
+        pendingDeepLinkConversationId = nil
     }
 }

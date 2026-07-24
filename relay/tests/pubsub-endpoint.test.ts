@@ -26,15 +26,15 @@ describe("POST /pubsub", () => {
 
     const payload = {
       message: {
+        attributes: {
+          "ce-type": "google.workspace.chat.message.v1.created",
+        },
         data: Buffer.from(
           JSON.stringify({
-            type: "google.workspace.chat.message.v1.created",
-            chatMessagePayload: {
-              message: {
-                sender: { displayName: "Alice" },
-                text: "deploy looks good",
-                space: { displayName: "#eng-standup", name: "spaces/AAA" },
-              },
+            message: {
+              sender: { displayName: "Alice" },
+              text: "deploy looks good",
+              space: { displayName: "#eng-standup", name: "spaces/AAA" },
             },
           }),
         ).toString("base64"),

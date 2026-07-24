@@ -102,4 +102,9 @@ final class MessagePreviewFormatterTests: XCTestCase {
         XCTAssertTrue(preview.hasSuffix("…"))
         XCTAssertLessThanOrEqual(preview.count, 20)
     }
+
+    func testNonPositiveMaxLengthReturnsEmpty() {
+        let preview = MessagePreviewFormatter().preview(senderName: "Alice", text: "hi", maxLength: 0)
+        XCTAssertEqual(preview, "")
+    }
 }

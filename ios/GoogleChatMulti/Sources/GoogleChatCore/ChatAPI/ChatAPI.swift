@@ -53,6 +53,25 @@ public struct SpaceDTO: Sendable, Equatable {
 }
 
 public enum ChatAPIParsing {
+    private static let iso8601Fractional: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter
+    }()
+
+    private static let iso8601: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
+        return formatter
+    }()
+
+    public static func parseCreateTime(_ value: String?) -> Date {
+        guard let value, !value.isEmpty else { return .distantPast }
+        return iso8601Fractional.date(from: value)
+            ?? iso8601.date(from: value)
+            ?? .distantPast
+    }
+
     public static func mapSpace(_ resource: SpaceResource) -> SpaceDTO {
         SpaceDTO(
             name: resource.name,
@@ -69,7 +88,7 @@ public enum ChatAPIParsing {
         guard let name = resource.name else { return nil }
         let senderName = resource.sender?.displayName ?? "Unknown"
         let isFromCurrentUser = resource.sender?.name == currentUserResourceName
-        let createTime = ISO8601DateFormatter().date(from: resource.createTime ?? "") ?? Date.distantPast
+        let createTime = parseCreateTime(resource.createTime)
 
         return ChatMessage(
             id: name,

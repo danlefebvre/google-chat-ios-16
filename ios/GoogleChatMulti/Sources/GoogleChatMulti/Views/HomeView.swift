@@ -5,8 +5,18 @@ struct RootView: View {
     @EnvironmentObject private var appState: AppState
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $appState.navigationPath) {
             HomeView()
+                .navigationDestination(for: ConversationId.self) { conversationId in
+                    if let conversation = appState.conversations.first(where: {
+                        $0.conversationId == conversationId
+                    }) {
+                        ThreadView(conversation: conversation)
+                    } else {
+                        Text("Conversation unavailable")
+                            .foregroundStyle(.secondary)
+                    }
+                }
         }
     }
 }
@@ -17,9 +27,7 @@ struct HomeView: View {
 
     var body: some View {
         List(appState.filteredConversations) { conversation in
-            NavigationLink {
-                ThreadView(conversation: conversation)
-            } label: {
+            NavigationLink(value: conversation.conversationId) {
                 ConversationRow(conversation: conversation)
             }
         }
@@ -40,8 +48,8 @@ struct HomeView: View {
             AccountManagerView()
         }
         .onChange(of: appState.pendingDeepLinkConversationId) { conversationId in
-            guard conversationId != nil else { return }
-            appState.pendingDeepLinkConversationId = nil
+            guard let conversationId else { return }
+            appState.openDeepLinkConversation(conversationId)
         }
     }
 }
