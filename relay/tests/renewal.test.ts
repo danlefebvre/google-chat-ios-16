@@ -34,11 +34,14 @@ describe("renewExpiringSubscriptions", () => {
       createdAt: new Date().toISOString(),
     });
 
+    const renewedExpireTime = new Date(
+      Date.now() + 4 * 60 * 60 * 1000,
+    ).toISOString();
     const events = {
       createSubscription: vi.fn(),
       renewSubscription: vi.fn().mockResolvedValue({
         name: "subscriptions/old",
-        expireTime: new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString(),
+        expireTime: renewedExpireTime,
       }),
       deleteSubscription: vi.fn(),
       revokeToken: vi.fn(),
@@ -65,6 +68,9 @@ describe("renewExpiringSubscriptions", () => {
       refreshToken: "rt",
     });
     expect(store.getAccount("iss|a")?.subscriptionName).toBe("subscriptions/old");
+    expect(store.getAccount("iss|a")?.subscriptionExpireTime).toBe(
+      renewedExpireTime,
+    );
     expect(alert).not.toHaveBeenCalled();
   });
 
