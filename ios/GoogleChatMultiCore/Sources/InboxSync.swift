@@ -7,19 +7,26 @@ public protocol ConversationCaching: AnyObject, Sendable {
     func deleteConversations(accountId: AccountID) async throws
 }
 
+public enum InboxSyncError: Error, Equatable, Sendable {
+    case spacePaginationLimitExceeded
+}
+
 public actor InboxSyncService {
     private let api: ChatAPIClient
     private let cache: any ConversationCaching
     private let previewConcurrencyLimit: Int
+    private let maxSpacePages: Int
 
     public init(
         api: ChatAPIClient,
         cache: any ConversationCaching,
-        previewConcurrencyLimit: Int = 4
+        previewConcurrencyLimit: Int = 4,
+        maxSpacePages: Int = 100
     ) {
         self.api = api
         self.cache = cache
         self.previewConcurrencyLimit = max(1, previewConcurrencyLimit)
+        self.maxSpacePages = max(1, maxSpacePages)
     }
 
     public func refreshAccounts(_ accounts: [LinkedAccount]) async throws -> [ConversationSummary] {
@@ -117,7 +124,12 @@ public actor InboxSyncService {
     private func listAllSpaces(accountId: AccountID) async throws -> [ChatSpace] {
         var spaces: [ChatSpace] = []
         var pageToken: String? = nil
+        var pageCount = 0
         repeat {
+            pageCount += 1
+            if pageCount > maxSpacePages {
+                throw InboxSyncError.spacePaginationLimitExceeded
+            }
             let response = try await api.listSpaces(accountId: accountId, pageToken: pageToken)
             spaces.append(contentsOf: response.spaces)
             pageToken = response.nextPageToken
