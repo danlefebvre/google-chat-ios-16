@@ -15,7 +15,7 @@ final class AppModel: ObservableObject {
     @Published var errorMessage: String?
 
     let authStore: AccountAuthStore
-    private let cache: GRDBConversationCache
+    private let cache: any ConversationCaching
     private var api: ChatAPIClient?
     private var sync: InboxSyncService?
     /// Serializes cached-inbox loads so a later refresh cannot be overwritten by stale cache.
@@ -23,7 +23,7 @@ final class AppModel: ObservableObject {
 
     init(
         authStore: AccountAuthStore = KeychainAccountAuthStore(),
-        cache: GRDBConversationCache = GRDBConversationCache()
+        cache: any ConversationCaching = GRDBConversationCache()
     ) {
         self.authStore = authStore
         self.cache = cache
