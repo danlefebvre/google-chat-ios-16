@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 	"unicode/utf8"
 )
 
@@ -36,7 +37,7 @@ type Client struct {
 // NewClient builds an ntfy publisher. baseURL should be like https://ntfy.sh (no trailing slash).
 func NewClient(baseURL, topic, token string, httpClient *http.Client) *Client {
 	if httpClient == nil {
-		httpClient = http.DefaultClient
+		httpClient = &http.Client{Timeout: 10 * time.Second}
 	}
 	return &Client{
 		baseURL: strings.TrimRight(baseURL, "/"),
@@ -48,7 +49,7 @@ func NewClient(baseURL, topic, token string, httpClient *http.Client) *Client {
 
 // FormatPreview builds the ntfy title and body with message preview text.
 func FormatPreview(accountLabel, spaceTitle, sender, preview string) (title, body string) {
-	title = fmt.Sprintf("[%s] %s", accountLabel, spaceTitle)
+	title = fmt.Sprintf("[%s] %s", sanitizeHeaderValue(accountLabel), sanitizeHeaderValue(spaceTitle))
 	body = fmt.Sprintf("%s: %s", sender, truncateRunes(preview, maxPreviewRunes))
 	return title, body
 }
@@ -82,6 +83,16 @@ func (c *Client) Publish(ctx context.Context, msg Message) error {
 		return fmt.Errorf("ntfy publish failed: status %d: %s", resp.StatusCode, strings.TrimSpace(string(b)))
 	}
 	return nil
+}
+
+// sanitizeHeaderValue strips CR/LF/NUL so values are safe in HTTP headers.
+func sanitizeHeaderValue(s string) string {
+	return strings.Map(func(r rune) rune {
+		if r == '\r' || r == '\n' || r == 0 {
+			return -1
+		}
+		return r
+	}, s)
 }
 
 func truncateRunes(s string, max int) string {

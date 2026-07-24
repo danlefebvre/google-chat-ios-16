@@ -58,7 +58,14 @@ func main() {
 	mux.HandleFunc("/v1/accounts/", accountItemHandler(store, subMgr, policy))
 	mux.HandleFunc("/v1/mutes", mutesHandler(policy))
 
-	srv := &http.Server{Addr: ":" + cfg.Port, Handler: mux}
+	srv := &http.Server{
+		Addr:              ":" + cfg.Port,
+		Handler:           mux,
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       15 * time.Second,
+		WriteTimeout:      15 * time.Second,
+		IdleTimeout:       60 * time.Second,
+	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()

@@ -22,6 +22,7 @@ Run these once in a project you control. You are Workspace admin for the work ac
 6. Deploy `relay/` (Cloud Run / Fly) with secrets:
    - `NTFY_TOPIC`, `NTFY_TOKEN`, `TOKEN_ENCRYPTION_KEY`
    - Google client credentials used to create Workspace Events subscriptions
+   - Mount durable storage for `ACCOUNTS_PATH` (default `./data/accounts.json`). Cloud Run/Fly restarts drop ephemeral disk; without a persistent volume (or equivalent), encrypted refresh tokens and subscription bindings are lost.
 
 7. Prove the path:
    ```bash

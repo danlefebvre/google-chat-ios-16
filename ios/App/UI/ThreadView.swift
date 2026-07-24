@@ -65,7 +65,7 @@ struct ThreadView: View {
 
     private var composer: some View {
         HStack(alignment: .bottom, spacing: 8) {
-            PhotosPicker(selection: $pickerItem, matching: .any(of: [.images, .item])) {
+            PhotosPicker(selection: $pickerItem, matching: .any(of: [.images, .videos])) {
                 Image(systemName: "paperclip")
             }
             .onChange(of: pickerItem) { item in

@@ -7,23 +7,27 @@ import Security
 public final class KeychainAuthStore: AuthStore, @unchecked Sendable {
     private let service: String
     private let accountKey = "authorizations"
+    private let lock = NSLock()
 
     public init(service: String = "com.googlechatmulti.auth") {
         self.service = service
     }
 
     public func all() -> [StoredAuthorization] {
+        lock.lock()
+        defer { lock.unlock() }
         #if canImport(Security)
-        guard let data = readData() else { return [] }
-        return (try? JSONDecoder().decode([StoredAuthorization].self, from: data)) ?? []
+        return (try? loadUnlocked()) ?? []
         #else
         return []
         #endif
     }
 
     public func save(_ auth: StoredAuthorization) throws {
+        lock.lock()
+        defer { lock.unlock() }
         #if canImport(Security)
-        var current = all().filter { $0.account.id != auth.account.id }
+        var current = try loadUnlocked().filter { $0.account.id != auth.account.id }
         current.append(auth)
         try write(current)
         #else
@@ -32,8 +36,10 @@ public final class KeychainAuthStore: AuthStore, @unchecked Sendable {
     }
 
     public func remove(id: AccountID) throws {
+        lock.lock()
+        defer { lock.unlock() }
         #if canImport(Security)
-        let current = all().filter { $0.account.id != id }
+        let current = try loadUnlocked().filter { $0.account.id != id }
         try write(current)
         #else
         throw KeychainError.unavailable
@@ -42,10 +48,20 @@ public final class KeychainAuthStore: AuthStore, @unchecked Sendable {
 
     public enum KeychainError: Error {
         case unavailable
+        case decodingFailed
         case unexpectedStatus(Int32)
     }
 
     #if canImport(Security)
+    private func loadUnlocked() throws -> [StoredAuthorization] {
+        guard let data = readData() else { return [] }
+        do {
+            return try JSONDecoder().decode([StoredAuthorization].self, from: data)
+        } catch {
+            throw KeychainError.decodingFailed
+        }
+    }
+
     private func write(_ auths: [StoredAuthorization]) throws {
         let data = try JSONEncoder().encode(auths)
         let query: [String: Any] = [

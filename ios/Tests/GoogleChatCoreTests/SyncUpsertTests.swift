@@ -2,7 +2,7 @@ import XCTest
 @testable import GoogleChatCore
 
 final class SyncUpsertTests: XCTestCase {
-    func testUpsertReplacesSameCompositeId() {
+    func testUpsertReplacesSameCompositeId() throws {
         let accountId = AccountID(issuer: "https://accounts.google.com", subject: "work")
         let cache = InMemoryConversationStore()
         let first = ConversationSummary(
@@ -15,8 +15,8 @@ final class SyncUpsertTests: XCTestCase {
             lastMessagePreview: "b", lastActivityAt: Date(timeIntervalSince1970: 2),
             unreadCount: 0, accountLabel: "Work", badgeColorHex: "#C45C26"
         )
-        cache.upsert(first)
-        cache.upsert(second)
+        try cache.upsert(first)
+        try cache.upsert(second)
         let all = cache.all()
         XCTAssertEqual(all.count, 1)
         XCTAssertEqual(all[0].title, "New")

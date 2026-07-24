@@ -127,3 +127,15 @@ func TestFormatTitleAndBody(t *testing.T) {
 		t.Fatalf("body = %q", body)
 	}
 }
+
+func TestFormatPreview_StripsHeaderControlChars(t *testing.T) {
+	t.Parallel()
+
+	title, _ := ntfy.FormatPreview("Work\r\nX-Injected: 1", "space\ntitle", "Alice", "hi")
+	if strings.ContainsAny(title, "\r\n") {
+		t.Fatalf("title still contains control chars: %q", title)
+	}
+	if title != "[WorkX-Injected: 1] spacetitle" {
+		t.Fatalf("title = %q", title)
+	}
+}

@@ -19,7 +19,7 @@ Always-on service that turns Google Workspace Events (via Pub/Sub) into **ntfy.s
 - `TOKEN_ENCRYPTION_KEY` — 64 hex chars (32-byte AES key)
 - `NTFY_BASE_URL` — default `https://ntfy.sh`
 - `NTFY_TOKEN` — optional access token
-- `ACCOUNTS_PATH` — default `./data/accounts.json`
+- `ACCOUNTS_PATH` — default `./data/accounts.json` (must be on durable storage in Cloud Run/Fly; ephemeral disk loses bindings on restart)
 - `QUIET_HOURS_*` — optional quiet window
 
 ## Local

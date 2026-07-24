@@ -20,7 +20,7 @@ type Client struct {
 // New builds a Workspace Events API client. accessToken must belong to the target Google account.
 func New(accessToken string, httpClient *http.Client) *Client {
 	if httpClient == nil {
-		httpClient = http.DefaultClient
+		httpClient = &http.Client{Timeout: 15 * time.Second}
 	}
 	return &Client{
 		baseURL:    "https://workspaceevents.googleapis.com/v1",

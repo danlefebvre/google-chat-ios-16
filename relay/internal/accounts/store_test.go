@@ -97,3 +97,54 @@ func TestStore_RemoveMissingIsNoop(t *testing.T) {
 		t.Fatalf("Remove missing: %v", err)
 	}
 }
+
+func TestStore_RemovePreservesConcurrentUpsert(t *testing.T) {
+	t.Parallel()
+
+	key := crypto.MustKeyFromHex("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
+	store, err := accounts.Open(filepath.Join(t.TempDir(), "a.json"), key)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+
+	id := "https://accounts.google.com|sub-1"
+	original := accounts.Account{
+		ID:             id,
+		Email:          "work@example.com",
+		Label:          "Work",
+		RefreshToken:   "refresh-old",
+		SubscriptionID: "subscriptions/old",
+		NtfyTopic:      "topic",
+	}
+	if err := store.Upsert(context.Background(), original); err != nil {
+		t.Fatalf("Upsert original: %v", err)
+	}
+
+	replacement := accounts.Account{
+		ID:             id,
+		Email:          "work@example.com",
+		Label:          "Work",
+		RefreshToken:   "refresh-new",
+		SubscriptionID: "subscriptions/new",
+		NtfyTopic:      "topic",
+	}
+	teardown := accounts.TeardownHooks{
+		DeleteSubscription: func(ctx context.Context, subscriptionID string) error {
+			if err := store.Upsert(context.Background(), replacement); err != nil {
+				t.Fatalf("Upsert during teardown: %v", err)
+			}
+			return nil
+		},
+	}
+	if err := store.Remove(context.Background(), id, teardown); err != nil {
+		t.Fatalf("Remove: %v", err)
+	}
+
+	got, ok := store.Get(id)
+	if !ok {
+		t.Fatal("concurrent Upsert should not be deleted by Remove")
+	}
+	if got.SubscriptionID != "subscriptions/new" || got.RefreshToken != "refresh-new" {
+		t.Fatalf("got %+v, want replacement account", got)
+	}
+}

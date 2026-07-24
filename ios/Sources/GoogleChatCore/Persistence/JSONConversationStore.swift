@@ -32,18 +32,18 @@ public final class JSONConversationStore: ConversationStore, @unchecked Sendable
         return Array(byID.values)
     }
 
-    public func upsert(_ conversation: ConversationSummary) {
+    public func upsert(_ conversation: ConversationSummary) throws {
         lock.lock()
         defer { lock.unlock() }
         byID[conversation.compositeId] = conversation
-        try? persistUnlocked()
+        try persistUnlocked()
     }
 
-    public func remove(compositeId: String) {
+    public func remove(compositeId: String) throws {
         lock.lock()
         defer { lock.unlock() }
         byID[compositeId] = nil
-        try? persistUnlocked()
+        try persistUnlocked()
     }
 
     private func persistUnlocked() throws {

@@ -158,6 +158,14 @@ func (s *Store) Remove(ctx context.Context, id string, hooks TeardownHooks) erro
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	current, ok := s.byID[id]
+	if !ok {
+		return nil
+	}
+	// Skip delete if a concurrent Upsert replaced the record mid-teardown.
+	if current.SubscriptionID != acct.SubscriptionID || current.RefreshToken != acct.RefreshToken {
+		return nil
+	}
 	delete(s.byID, id)
 	return s.persistLocked()
 }

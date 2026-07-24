@@ -7,7 +7,7 @@ final class JSONConversationStoreTests: XCTestCase {
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
         let store = try JSONConversationStore(directory: dir)
         let accountId = AccountID(issuer: "https://accounts.google.com", subject: "work")
-        store.upsert(ConversationSummary(
+        try store.upsert(ConversationSummary(
             accountId: accountId,
             spaceName: "spaces/A",
             title: "Old",
@@ -17,7 +17,7 @@ final class JSONConversationStoreTests: XCTestCase {
             accountLabel: "Work",
             badgeColorHex: "#C45C26"
         ))
-        store.upsert(ConversationSummary(
+        try store.upsert(ConversationSummary(
             accountId: accountId,
             spaceName: "spaces/A",
             title: "New",

@@ -79,4 +79,22 @@ final class ChatAPIDecodingTests: XCTestCase {
         let json = String(data: data, encoding: .utf8)!
         XCTAssertTrue(json.contains("🎉"))
     }
+
+    func testDecodeFractionalSecondTimestamps() throws {
+        let json = """
+        {
+          "spaces": [
+            {
+              "name": "spaces/AAA",
+              "displayName": "#eng",
+              "lastActiveTime": "2026-07-24T12:00:00.123Z"
+            }
+          ]
+        }
+        """.data(using: .utf8)!
+
+        let page = try JSONDecoder.chat.decode(SpacesPage.self, from: json)
+        XCTAssertEqual(page.spaces.count, 1)
+        XCTAssertNotNil(page.spaces[0].lastActiveTime)
+    }
 }

@@ -2,6 +2,7 @@ package mutes
 
 import (
 	"fmt"
+	"sync"
 	"time"
 )
 
@@ -15,6 +16,7 @@ type QuietHours struct {
 
 // Policy decides whether a chat event should produce an ntfy publish.
 type Policy struct {
+	mu            sync.RWMutex
 	mutedAccounts map[string]bool
 	mutedSpaces   map[string]bool
 	quiet         QuietHours
@@ -45,6 +47,8 @@ func SpaceKey(accountID, spaceName string) string {
 
 // ShouldNotify returns false when the account/space is muted or quiet hours apply.
 func (p *Policy) ShouldNotify(accountID, spaceName string, at time.Time) bool {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
 	if p.mutedAccounts[accountID] {
 		return false
 	}
@@ -59,6 +63,8 @@ func (p *Policy) ShouldNotify(accountID, spaceName string, at time.Time) bool {
 
 // SetAccountMuted updates account-level mute state.
 func (p *Policy) SetAccountMuted(accountID string, muted bool) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
 	if muted {
 		p.mutedAccounts[accountID] = true
 		return
@@ -68,6 +74,8 @@ func (p *Policy) SetAccountMuted(accountID string, muted bool) {
 
 // SetSpaceMuted updates per-space mute state.
 func (p *Policy) SetSpaceMuted(accountID, spaceName string, muted bool) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
 	key := SpaceKey(accountID, spaceName)
 	if muted {
 		p.mutedSpaces[key] = true

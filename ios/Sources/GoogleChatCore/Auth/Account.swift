@@ -75,19 +75,26 @@ public protocol AuthStore: AnyObject {
 }
 
 public final class InMemoryAuthStore: AuthStore, @unchecked Sendable {
+    private let lock = NSLock()
     private var byID: [AccountID: StoredAuthorization] = [:]
 
     public init() {}
 
     public func all() -> [StoredAuthorization] {
-        Array(byID.values).sorted { $0.account.email < $1.account.email }
+        lock.lock()
+        defer { lock.unlock() }
+        return Array(byID.values).sorted { $0.account.email < $1.account.email }
     }
 
     public func save(_ auth: StoredAuthorization) throws {
+        lock.lock()
+        defer { lock.unlock() }
         byID[auth.account.id] = auth
     }
 
     public func remove(id: AccountID) throws {
+        lock.lock()
+        defer { lock.unlock() }
         byID[id] = nil
     }
 }

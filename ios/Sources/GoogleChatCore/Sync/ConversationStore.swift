@@ -2,24 +2,31 @@ import Foundation
 
 public protocol ConversationStore: AnyObject {
     func all() -> [ConversationSummary]
-    func upsert(_ conversation: ConversationSummary)
-    func remove(compositeId: String)
+    func upsert(_ conversation: ConversationSummary) throws
+    func remove(compositeId: String) throws
 }
 
 public final class InMemoryConversationStore: ConversationStore, @unchecked Sendable {
+    private let lock = NSLock()
     private var byID: [String: ConversationSummary] = [:]
 
     public init() {}
 
     public func all() -> [ConversationSummary] {
-        Array(byID.values)
+        lock.lock()
+        defer { lock.unlock() }
+        return Array(byID.values)
     }
 
-    public func upsert(_ conversation: ConversationSummary) {
+    public func upsert(_ conversation: ConversationSummary) throws {
+        lock.lock()
+        defer { lock.unlock() }
         byID[conversation.compositeId] = conversation
     }
 
-    public func remove(compositeId: String) {
+    public func remove(compositeId: String) throws {
+        lock.lock()
+        defer { lock.unlock() }
         byID[compositeId] = nil
     }
 }
@@ -38,6 +45,7 @@ public struct SpaceSyncService {
         previewProvider: (ChatSpace) -> String = { _ in "" }
     ) async throws {
         var token: String? = nil
+        var seen = Set<String>()
         repeat {
             let page = try await client.listSpaces(accessToken: auth.accessToken, pageToken: token)
             for space in page.spaces {
@@ -59,9 +67,17 @@ public struct SpaceSyncService {
                     accountLabel: auth.account.label,
                     badgeColorHex: auth.account.badgeColorHex
                 )
-                store.upsert(summary)
+                try store.upsert(summary)
+                seen.insert(summary.compositeId)
             }
             token = page.nextPageToken
         } while token != nil
+
+        // Only prune after the full pagination sequence succeeded.
+        for existing in store.all() where existing.accountId == auth.account.id {
+            if !seen.contains(existing.compositeId) {
+                try store.remove(compositeId: existing.compositeId)
+            }
+        }
     }
 }

@@ -37,10 +37,12 @@ open GoogleChatMulti.xcodeproj
 
 - `openid` `email` `profile`
 - `https://www.googleapis.com/auth/chat.spaces.readonly`
-- `https://www.googleapis.com/auth/chat.messages`
+- `https://www.googleapis.com/auth/chat.messages.readonly`
+- `https://www.googleapis.com/auth/chat.messages.create`
+- `https://www.googleapis.com/auth/chat.messages.reactions`
 - `https://www.googleapis.com/auth/chat.users.readstate`
 
 ## Notifications
 
 System pushes come from the **ntfy** app + `relay/`. This target has **no** APS entitlement.
-Deep links use `googlechatmulti://spaces/{accountId}/{spaceName}`.
+Deep links use `googlechatmulti://spaces/{url-encoded accountId}/{url-encoded spaceName}`.

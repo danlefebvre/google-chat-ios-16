@@ -67,7 +67,7 @@ public final class AppModel: ObservableObject {
         }
         try? authStore.remove(id: id)
         for row in conversationStore.all() where row.accountId == id {
-            conversationStore.remove(compositeId: row.compositeId)
+            try? conversationStore.remove(compositeId: row.compositeId)
         }
         if selectedConversation?.accountId == id {
             selectedConversation = nil
@@ -96,10 +96,7 @@ public final class AppModel: ObservableObject {
 
     public func openConversation(_ conversation: ConversationSummary) async {
         selectedConversation = conversation
-        guard let auth = accounts.first(where: { $0.account.id == conversation.accountId }) else {
-            errorMessage = "Account missing for thread"
-            return
-        }
+        guard let auth = freshAuthorization(for: conversation.accountId) else { return }
         do {
             let page = try await chatClient.listMessages(
                 accessToken: auth.accessToken,
@@ -120,7 +117,7 @@ public final class AppModel: ObservableObject {
 
     public func sendMessage(_ text: String) async {
         guard let conversation = selectedConversation,
-              let auth = accounts.first(where: { $0.account.id == conversation.accountId })
+              let auth = freshAuthorization(for: conversation.accountId)
         else { return }
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
@@ -138,7 +135,7 @@ public final class AppModel: ObservableObject {
 
     public func react(to message: ChatMessage, emoji: String) async {
         guard let conversation = selectedConversation,
-              let auth = accounts.first(where: { $0.account.id == conversation.accountId })
+              let auth = freshAuthorization(for: conversation.accountId)
         else { return }
         do {
             try await chatClient.createReaction(
@@ -192,7 +189,7 @@ public final class AppModel: ObservableObject {
 
     public func uploadAttachment(filename: String, contentType: String, bytes: Data) async throws {
         guard let conversation = selectedConversation,
-              let auth = accounts.first(where: { $0.account.id == conversation.accountId })
+              let auth = freshAuthorization(for: conversation.accountId)
         else { return }
         let msg = try await chatClient.uploadMedia(
             accessToken: auth.accessToken,
@@ -202,6 +199,19 @@ public final class AppModel: ObservableObject {
             bytes: bytes
         )
         threadMessages.append(msg)
+    }
+
+    /// Returns a stored authorization only when its access token is still usable.
+    private func freshAuthorization(for accountId: AccountID) -> StoredAuthorization? {
+        guard let auth = accounts.first(where: { $0.account.id == accountId }) else {
+            errorMessage = "Account missing for thread"
+            return nil
+        }
+        if auth.needsRefresh() {
+            errorMessage = "Re-auth required for \(auth.account.email)"
+            return nil
+        }
+        return auth
     }
 }
 

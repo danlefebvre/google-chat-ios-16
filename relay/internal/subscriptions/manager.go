@@ -2,6 +2,7 @@ package subscriptions
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -68,19 +69,21 @@ func (m *Manager) RefreshDue(ctx context.Context) (renewed int, err error) {
 	m.mu.Unlock()
 
 	deadline := m.now().Add(m.renewIn)
+	var errs []error
 	for _, r := range snapshot {
 		if r.ExpireTime.After(deadline) {
 			continue
 		}
-		exp, err := m.client.Renew(ctx, r.SubscriptionID)
-		if err != nil {
-			return renewed, fmt.Errorf("renew %s: %w", r.SubscriptionID, err)
+		exp, rErr := m.client.Renew(ctx, r.SubscriptionID)
+		if rErr != nil {
+			errs = append(errs, fmt.Errorf("renew %s: %w", r.SubscriptionID, rErr))
+			continue
 		}
 		r.ExpireTime = exp
 		m.Track(r)
 		renewed++
 	}
-	return renewed, nil
+	return renewed, errors.Join(errs...)
 }
 
 // Delete removes the remote subscription and untracks it.
@@ -94,6 +97,11 @@ func (m *Manager) Delete(ctx context.Context, accountID string) error {
 	if err := m.client.Delete(ctx, rec.SubscriptionID); err != nil {
 		return err
 	}
-	m.Untrack(accountID)
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	// Avoid dropping a concurrently Track()'d replacement for the same account.
+	if current, still := m.byAcct[accountID]; still && current.SubscriptionID == rec.SubscriptionID {
+		delete(m.byAcct, accountID)
+	}
 	return nil
 }
