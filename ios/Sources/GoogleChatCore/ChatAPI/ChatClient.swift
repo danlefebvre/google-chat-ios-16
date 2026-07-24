@@ -83,6 +83,52 @@ public struct ChatClient: Sendable {
         }
     }
 
+    public func uploadAttachment(
+        spaceName: String,
+        fileName: String,
+        contentType: String,
+        data: Data,
+        accessToken: String
+    ) async throws -> ChatAttachment {
+        if AttachmentPolicy.shouldDownsample(byteCount: data.count, contentType: contentType),
+           data.count > AttachmentPolicy.maxThumbnailBytes * 8 {
+            // Callers should downsample before upload on device; still allow API path.
+        }
+        var components = URLComponents(url: url(path: "v1/media/\(spaceName)/attachments"), resolvingAgainstBaseURL: false)!
+        components.queryItems = [URLQueryItem(name: "uploadType", value: "multipart")]
+        guard let endpoint = components.url else { throw ChatClientError.invalidURL }
+
+        let boundary = "gcm-\(UUID().uuidString)"
+        var body = Data()
+        let metadata = "{\"filename\":\"\(fileName)\"}"
+        body.append("--\(boundary)\r\n".data(using: .utf8)!)
+        body.append("Content-Type: application/json; charset=UTF-8\r\n\r\n".data(using: .utf8)!)
+        body.append(metadata.data(using: .utf8)!)
+        body.append("\r\n--\(boundary)\r\n".data(using: .utf8)!)
+        body.append("Content-Type: \(contentType)\r\n\r\n".data(using: .utf8)!)
+        body.append(data)
+        body.append("\r\n--\(boundary)--\r\n".data(using: .utf8)!)
+
+        var request = URLRequest(url: endpoint)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+        request.setValue("multipart/related; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        request.httpBody = body
+        return try await send(request)
+    }
+
+    public func downloadAttachment(attachmentName: String, accessToken: String) async throws -> Data {
+        var request = URLRequest(url: url(path: "v1/media/\(attachmentName)"))
+        request.httpMethod = "GET"
+        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+        let (data, response) = try await transport.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            let code = (response as? HTTPURLResponse)?.statusCode ?? -1
+            throw ChatClientError.httpStatus(code)
+        }
+        return data
+    }
+
     private func url(path: String) -> URL {
         URL(string: path, relativeTo: baseURL)!.absoluteURL
     }
