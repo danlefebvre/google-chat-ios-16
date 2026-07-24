@@ -18,6 +18,8 @@ final class AppModel: ObservableObject {
     private let cache: GRDBConversationCache
     private var api: ChatAPIClient?
     private var sync: InboxSyncService?
+    /// Serializes cached-inbox loads so a later refresh cannot be overwritten by stale cache.
+    private var cachedInboxTask: Task<Void, Never>?
 
     init(
         authStore: AccountAuthStore = KeychainAccountAuthStore(),
@@ -39,9 +41,15 @@ final class AppModel: ObservableObject {
         let client = ChatAPIClient(tokens: tokens)
         api = client
         sync = InboxSyncService(api: client, cache: cache)
-        Task {
+        cachedInboxTask?.cancel()
+        let syncService = sync
+        cachedInboxTask = Task {
             do {
-                conversations = try await sync?.cachedInbox() ?? []
+                let rows = try await syncService?.cachedInbox() ?? []
+                try Task.checkCancellation()
+                conversations = rows
+            } catch is CancellationError {
+                // Superseded by a newer bootstrap/refresh sequence.
             } catch {
                 errorMessage = error.localizedDescription
             }
@@ -49,6 +57,8 @@ final class AppModel: ObservableObject {
     }
 
     func refresh() async {
+        // Wait for any in-flight cached load so stale results cannot overwrite refresh.
+        await cachedInboxTask?.value
         guard let sync else { return }
         isRefreshing = true
         defer { isRefreshing = false }
