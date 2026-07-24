@@ -10,10 +10,16 @@ public protocol ConversationCaching: AnyObject, Sendable {
 public actor InboxSyncService {
     private let api: ChatAPIClient
     private let cache: any ConversationCaching
+    private let previewConcurrencyLimit: Int
 
-    public init(api: ChatAPIClient, cache: any ConversationCaching) {
+    public init(
+        api: ChatAPIClient,
+        cache: any ConversationCaching,
+        previewConcurrencyLimit: Int = 4
+    ) {
         self.api = api
         self.cache = cache
+        self.previewConcurrencyLimit = max(1, previewConcurrencyLimit)
     }
 
     public func refreshAccounts(_ accounts: [LinkedAccount]) async throws -> [ConversationSummary] {
@@ -21,39 +27,8 @@ public actor InboxSyncService {
 
         for account in accounts {
             let spaces = try await listAllSpaces(accountId: account.id)
-            for space in spaces {
-                let preview: String
-                let activity: Date
-                if let messages = try? await api.listMessages(
-                    accountId: account.id,
-                    spaceName: space.name,
-                    pageSize: 1
-                ), let latest = messages.messages.first {
-                    let sender = latest.sender?.displayName ?? "Someone"
-                    let text = latest.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-                    preview = text.isEmpty ? "\(sender): (attachment)" : "\(sender): \(text)"
-                    activity = latest.createTime ?? space.lastActiveTime ?? .distantPast
-                } else {
-                    preview = ""
-                    activity = space.lastActiveTime ?? .distantPast
-                }
-
-                merged.append(
-                    ConversationSummary(
-                        accountId: account.id,
-                        accountLabel: account.label,
-                        accountColorHex: account.colorHex,
-                        spaceName: space.name,
-                        title: space.isDirectMessage && space.resolvedTitle == "DM"
-                            ? "DM"
-                            : space.resolvedTitle,
-                        lastMessagePreview: preview,
-                        lastActivityAt: activity,
-                        unreadCount: 0,
-                        isDirectMessage: space.isDirectMessage
-                    )
-                )
-            }
+            let summaries = try await fetchSummaries(account: account, spaces: spaces)
+            merged.append(contentsOf: summaries)
         }
 
         let sorted = InboxMerger.merge(merged)
@@ -67,6 +42,76 @@ public actor InboxSyncService {
 
     public func purgeAccount(_ accountId: AccountID) async throws {
         try await cache.deleteConversations(accountId: accountId)
+    }
+
+    private func fetchSummaries(
+        account: LinkedAccount,
+        spaces: [ChatSpace]
+    ) async throws -> [ConversationSummary] {
+        if spaces.isEmpty { return [] }
+
+        return try await withThrowingTaskGroup(of: (Int, ConversationSummary).self) { group in
+            var results: [(Int, ConversationSummary)] = []
+            results.reserveCapacity(spaces.count)
+
+            var nextIndex = 0
+            let limit = min(previewConcurrencyLimit, spaces.count)
+
+            func addTask(at index: Int) {
+                let space = spaces[index]
+                group.addTask {
+                    let summary = await self.makeSummary(account: account, space: space)
+                    return (index, summary)
+                }
+            }
+
+            while nextIndex < limit {
+                addTask(at: nextIndex)
+                nextIndex += 1
+            }
+
+            while let (index, summary) = try await group.next() {
+                results.append((index, summary))
+                if nextIndex < spaces.count {
+                    addTask(at: nextIndex)
+                    nextIndex += 1
+                }
+            }
+
+            return results.sorted { $0.0 < $1.0 }.map(\.1)
+        }
+    }
+
+    private func makeSummary(account: LinkedAccount, space: ChatSpace) async -> ConversationSummary {
+        let preview: String
+        let activity: Date
+        if let messages = try? await api.listMessages(
+            accountId: account.id,
+            spaceName: space.name,
+            pageSize: 1
+        ), let latest = messages.messages.first {
+            let sender = latest.sender?.displayName ?? "Someone"
+            let text = latest.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            preview = text.isEmpty ? "\(sender): (attachment)" : "\(sender): \(text)"
+            activity = latest.createTime ?? space.lastActiveTime ?? .distantPast
+        } else {
+            preview = ""
+            activity = space.lastActiveTime ?? .distantPast
+        }
+
+        return ConversationSummary(
+            accountId: account.id,
+            accountLabel: account.label,
+            accountColorHex: account.colorHex,
+            spaceName: space.name,
+            title: space.isDirectMessage && space.resolvedTitle == "DM"
+                ? "DM"
+                : space.resolvedTitle,
+            lastMessagePreview: preview,
+            lastActivityAt: activity,
+            unreadCount: 0,
+            isDirectMessage: space.isDirectMessage
+        )
     }
 
     private func listAllSpaces(accountId: AccountID) async throws -> [ChatSpace] {
