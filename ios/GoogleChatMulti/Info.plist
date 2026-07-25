@@ -42,7 +42,7 @@
 	<key>GIDClientID</key>
 	<string>740346641921-jicrse28bht7m14djcn47strpkdolfaf.apps.googleusercontent.com</string>
 	<key>RELAY_BASE_URL</key>
-	<string>https://YOUR_RELAY_HOST</string>
+	<string>https://google-chat-relay.danielrochlefebvre.com</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>UIApplicationSceneManifest</key>
