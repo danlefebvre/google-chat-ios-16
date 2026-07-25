@@ -71,9 +71,10 @@ Thumbs.db
 # Project-specific
 relay/data/
 .worktrees/
+*.ipa
 *.xcuserstate
 DerivedData/
 .swiftpm/
 ios/GoogleChatMultiCore/.build/
-*.xcodeproj/xcuserdata/
-*.xcworkspace/xcuserdata/
+xcuserdata/
+project.xcworkspace/
