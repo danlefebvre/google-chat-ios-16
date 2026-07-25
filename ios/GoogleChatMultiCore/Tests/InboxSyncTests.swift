@@ -17,6 +17,21 @@ final class InboxSyncTests: XCTestCase {
         URLProtocolStub.handler = { request in
             calls += 1
             let url = request.url!.absoluteString
+            if url.contains("spaceReadState") {
+                let json = #"{"name":"users/me/spaces/A/spaceReadState","lastReadTime":"2020-01-01T00:00:00Z"}"#
+                    .data(using: .utf8)!
+                return (
+                    HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
+                    json
+                )
+            }
+            if url.contains("/messages") {
+                let json = #"{"messages":[]}"#.data(using: .utf8)!
+                return (
+                    HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
+                    json
+                )
+            }
             if url.contains("/spaces") {
                 let pageToken = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?
                     .queryItems?.first(where: { $0.name == "pageToken" })?.value
@@ -35,7 +50,6 @@ final class InboxSyncTests: XCTestCase {
                     json
                 )
             }
-            // listMessages — empty is fine
             let json = #"{"messages":[]}"#.data(using: .utf8)!
             return (
                 HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
@@ -55,6 +69,58 @@ final class InboxSyncTests: XCTestCase {
         let rows = try await sync.refreshAccounts([account])
         XCTAssertEqual(Set(rows.map(\.spaceName)), Set(["spaces/A", "spaces/B"]))
         XCTAssertGreaterThanOrEqual(calls, 2)
+    }
+
+    func testRefreshAccountsMarksUnreadWhenLatestMessageIsAfterLastRead() async throws {
+        let account = LinkedAccount(
+            id: AccountID(issuer: "https://accounts.google.com", subject: "work"),
+            email: "you@work.com",
+            label: "Work",
+            colorHex: "#C45C26"
+        )
+
+        URLProtocolStub.handler = { request in
+            let url = request.url!.absoluteString
+            if url.contains("spaceReadState") {
+                let json = #"{"name":"users/me/spaces/A/spaceReadState","lastReadTime":"2024-01-01T00:00:00Z"}"#
+                    .data(using: .utf8)!
+                return (
+                    HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
+                    json
+                )
+            }
+            if url.contains("/messages") {
+                let json = """
+                {"messages":[{"name":"spaces/A/messages/1","text":"hi","createTime":"2024-06-01T12:00:00Z","sender":{"displayName":"Sam"}}]}
+                """.data(using: .utf8)!
+                return (
+                    HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
+                    json
+                )
+            }
+            if url.contains("/spaces") {
+                let json = #"{"spaces":[{"name":"spaces/A","displayName":"One","spaceType":"SPACE"}]}"#
+                    .data(using: .utf8)!
+                return (
+                    HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
+                    json
+                )
+            }
+            return (
+                HTTPURLResponse(url: request.url!, statusCode: 404, httpVersion: nil, headerFields: nil)!,
+                Data()
+            )
+        }
+
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [URLProtocolStub.self]
+        let client = ChatAPIClient(
+            tokens: StubTokens(["\(account.id.rawValue)": "tok"]),
+            session: URLSession(configuration: config)
+        )
+        let sync = InboxSyncService(api: client, cache: InMemoryConversationCache())
+        let rows = try await sync.refreshAccounts([account])
+        XCTAssertEqual(rows.first?.unreadCount, 1)
     }
 
     func testReplaceConversationsDropsStaleRows() async throws {

@@ -172,14 +172,20 @@ public actor ChatAPIClient {
         return try await send(request)
     }
 
+    public func getSpaceReadState(
+        accountId: AccountID,
+        spaceName: String
+    ) async throws -> SpaceReadState {
+        let url = try spaceReadStateURL(spaceName: spaceName)
+        return try await get(url, accountId: accountId)
+    }
+
     public func markSpaceRead(
         accountId: AccountID,
         spaceName: String,
         lastReadTime: Date = Date()
     ) async throws {
-        // users.spaces.spaceReadState patch
-        let path = "users/me/spaces/\(spaceName.replacingOccurrences(of: "spaces/", with: ""))/spaceReadState"
-        let url = baseURL.appendingPathComponent(path)
+        let url = try spaceReadStateURL(spaceName: spaceName)
         struct Body: Encodable { let lastReadTime: Date }
         let _: EmptyResponse = try await patch(
             url,
@@ -187,6 +193,15 @@ public actor ChatAPIClient {
             body: Body(lastReadTime: lastReadTime),
             query: [URLQueryItem(name: "updateMask", value: "lastReadTime")]
         )
+    }
+
+    private func spaceReadStateURL(spaceName: String) throws -> URL {
+        let spaceId = spaceName.replacingOccurrences(of: "spaces/", with: "")
+        // Build with string concat so path slashes are not percent-encoded.
+        guard let url = URL(string: "\(baseURL.absoluteString)/users/me/spaces/\(spaceId)/spaceReadState") else {
+            throw ChatAPIError.invalidURL
+        }
+        return url
     }
 
     private struct EmptyResponse: Decodable {}

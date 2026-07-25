@@ -20,6 +20,8 @@ final class AppModel: ObservableObject {
     private var sync: InboxSyncService?
     /// Serializes cached-inbox loads so a later refresh cannot be overwritten by stale cache.
     private var cachedInboxTask: Task<Void, Never>?
+    /// Coalesces concurrent refresh triggers (home appear + scene active).
+    private var refreshTask: Task<Void, Never>?
 
     init(
         authStore: AccountAuthStore = KeychainAccountAuthStore(),
@@ -58,6 +60,19 @@ final class AppModel: ObservableObject {
     }
 
     func refresh() async {
+        if let refreshTask {
+            await refreshTask.value
+            return
+        }
+        let task = Task { @MainActor in
+            await self.performRefresh()
+        }
+        refreshTask = task
+        await task.value
+        refreshTask = nil
+    }
+
+    private func performRefresh() async {
         // Wait for any in-flight cached load so stale results cannot overwrite refresh.
         await cachedInboxTask?.value
         guard let sync else { return }
@@ -71,6 +86,13 @@ final class AppModel: ObservableObject {
             // Foreground fallback banner when sync/relay path is unhealthy.
             banner = "Could not refresh chats. Showing cached threads."
         }
+    }
+
+    func clearUnread(for compositeId: String) {
+        guard let index = conversations.firstIndex(where: { $0.compositeId == compositeId }) else {
+            return
+        }
+        conversations[index].unreadCount = 0
     }
 
     func addAccount(_ account: LinkedAccount, refreshToken: String, accessToken: String) {

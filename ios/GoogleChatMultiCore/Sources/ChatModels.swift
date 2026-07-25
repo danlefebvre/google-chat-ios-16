@@ -93,6 +93,17 @@ public struct MessageListResponse: Codable, Sendable {
     }
 }
 
+/// A user's read position in a space (`users.spaces.spaceReadState`).
+public struct SpaceReadState: Codable, Hashable, Sendable {
+    public var name: String?
+    public var lastReadTime: Date?
+
+    public init(name: String? = nil, lastReadTime: Date? = nil) {
+        self.name = name
+        self.lastReadTime = lastReadTime
+    }
+}
+
 public struct ChatMessage: Codable, Hashable, Identifiable, Sendable {
     public var name: String
     public var text: String?

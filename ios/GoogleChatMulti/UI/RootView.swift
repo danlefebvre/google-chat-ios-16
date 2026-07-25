@@ -3,6 +3,7 @@ import GoogleChatMultiCore
 
 struct RootView: View {
     @EnvironmentObject private var model: AppModel
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         NavigationStack(path: $model.path) {
@@ -15,6 +16,12 @@ struct RootView: View {
                         AccountManagerView()
                     }
                 }
+        }
+        .onChange(of: scenePhase) { phase in
+            // Refresh the unified inbox whenever the app returns to the foreground.
+            if phase == .active {
+                Task { await model.refresh() }
+            }
         }
         .overlay(alignment: .top) {
             if let banner = model.banner {

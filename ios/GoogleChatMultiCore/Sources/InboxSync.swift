@@ -102,6 +102,7 @@ public actor InboxSyncService {
 
         let preview: String
         let activity: Date
+        let latestCreateTime: Date?
         if let messages = try? await api.listMessages(
             accountId: account.id,
             spaceName: space.name,
@@ -111,10 +112,18 @@ public actor InboxSyncService {
             let text = latest.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             preview = text.isEmpty ? "\(sender): (attachment)" : "\(sender): \(text)"
             activity = latest.createTime ?? space.lastActiveTime ?? .distantPast
+            latestCreateTime = latest.createTime
         } else {
             preview = ""
             activity = space.lastActiveTime ?? .distantPast
+            latestCreateTime = nil
         }
+
+        let unreadCount = await unreadCount(
+            accountId: account.id,
+            spaceName: space.name,
+            latestMessageTime: latestCreateTime
+        )
 
         return ConversationSummary(
             accountId: account.id,
@@ -124,9 +133,29 @@ public actor InboxSyncService {
             title: title,
             lastMessagePreview: preview,
             lastActivityAt: activity,
-            unreadCount: 0,
+            unreadCount: unreadCount,
             isDirectMessage: space.isDirectMessage
         )
+    }
+
+    /// Space is unread when the latest top-level message is newer than `lastReadTime`.
+    private func unreadCount(
+        accountId: AccountID,
+        spaceName: String,
+        latestMessageTime: Date?
+    ) async -> Int {
+        guard let latestMessageTime else { return 0 }
+        guard let readState = try? await api.getSpaceReadState(
+            accountId: accountId,
+            spaceName: spaceName
+        ) else {
+            return 0
+        }
+        guard let lastRead = readState.lastReadTime else {
+            // Never read — treat as unread when there is at least one message.
+            return 1
+        }
+        return latestMessageTime > lastRead ? 1 : 0
     }
 
     private func memberDisplayNames(accountId: AccountID, spaceName: String) async -> [String: String] {

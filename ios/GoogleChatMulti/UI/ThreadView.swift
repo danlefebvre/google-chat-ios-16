@@ -132,10 +132,15 @@ struct ThreadView: View {
             map[me] = "You"
             memberNames = map
             messages = response.messages
-            try? await api.markSpaceRead(
-                accountId: conversation.accountId,
-                spaceName: conversation.spaceName
-            )
+            do {
+                try await api.markSpaceRead(
+                    accountId: conversation.accountId,
+                    spaceName: conversation.spaceName
+                )
+                model.clearUnread(for: conversation.compositeId)
+            } catch {
+                // Keep unread styling until mark-read or a later inbox refresh succeeds.
+            }
         } catch {
             loadError = error.localizedDescription
         }

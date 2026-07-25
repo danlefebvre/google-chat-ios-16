@@ -55,9 +55,13 @@ struct InboxView: View {
                 .background(Color("CanvasBackground").opacity(0.96))
         }
         .background(Color("CanvasBackground").ignoresSafeArea())
-        .task {
-            if model.conversations.isEmpty {
-                await model.refresh()
+        .onAppear {
+            Task { await model.refresh() }
+        }
+        .onChange(of: model.path) { path in
+            // Returning to the inbox (home) from a thread/accounts screen.
+            if path.isEmpty {
+                Task { await model.refresh() }
             }
         }
         .refreshable {
@@ -100,27 +104,30 @@ struct FilterChipBar: View {
 struct ConversationRowView: View {
     let row: ConversationSummary
 
+    private var isUnread: Bool { row.unreadCount > 0 }
+
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             AccountBadge(label: row.accountLabel, colorHex: row.accountColorHex)
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
                     Text(row.title)
-                        .font(.headline)
+                        .font(.headline.weight(isUnread ? .bold : .semibold))
                         .foregroundStyle(Color("PrimaryText"))
                         .lineLimit(1)
                     Spacer()
                     Text(row.lastActivityAt, style: .relative)
-                        .font(.caption)
-                        .foregroundStyle(Color("SecondaryText"))
+                        .font(isUnread ? .caption.weight(.semibold) : .caption)
+                        .foregroundStyle(isUnread ? Color("PrimaryText") : Color("SecondaryText"))
                 }
                 Text(row.lastMessagePreview)
-                    .font(.subheadline)
-                    .foregroundStyle(Color("SecondaryText"))
+                    .font(isUnread ? .subheadline.weight(.semibold) : .subheadline)
+                    .foregroundStyle(isUnread ? Color("PrimaryText") : Color("SecondaryText"))
                     .lineLimit(2)
             }
         }
         .padding(.vertical, 2)
+        .accessibilityValue(isUnread ? "Unread" : "Read")
     }
 }
 
