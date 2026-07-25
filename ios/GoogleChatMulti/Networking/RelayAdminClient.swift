@@ -103,14 +103,7 @@ actor RelayAdminClient {
         label: String,
         relayCredential: String
     ) async throws {
-        guard var components = URLComponents(url: try endpoint("accounts"), resolvingAgainstBaseURL: false)
-        else {
-            throw RelayClientError.requestFailed(status: -1, body: "invalid relay accounts URL")
-        }
-        components.queryItems = [URLQueryItem(name: "accountId", value: accountId.rawValue)]
-        guard let url = components.url else {
-            throw RelayClientError.requestFailed(status: -1, body: "invalid relay label URL")
-        }
+        let url = try accountsURL(accountId: accountId, invalidURLBody: "invalid relay label URL")
         AppLog.relay.info(
             "PATCH \(url.absoluteString, privacy: .public) label=\(label)"
         )
@@ -132,14 +125,7 @@ actor RelayAdminClient {
     func removeAccount(_ accountId: AccountID, relayCredential: String) async throws {
         // Account ids contain `https://…|sub`. Putting that in the path breaks on `/`
         // (and some proxies reject `%2F`). Use a query param instead.
-        guard var components = URLComponents(url: try endpoint("accounts"), resolvingAgainstBaseURL: false)
-        else {
-            throw RelayClientError.requestFailed(status: -1, body: "invalid relay accounts URL")
-        }
-        components.queryItems = [URLQueryItem(name: "accountId", value: accountId.rawValue)]
-        guard let url = components.url else {
-            throw RelayClientError.requestFailed(status: -1, body: "invalid relay teardown URL")
-        }
+        let url = try accountsURL(accountId: accountId, invalidURLBody: "invalid relay teardown URL")
         AppLog.relay.info("DELETE \(url.absoluteString, privacy: .public)")
         var request = URLRequest(url: url)
         request.httpMethod = "DELETE"
@@ -152,6 +138,19 @@ actor RelayAdminClient {
             throw RelayClientError.requestFailed(status: status, body: body)
         }
         AppLog.relay.info("teardown ok accountId=\(accountId.rawValue, privacy: .public)")
+    }
+
+    /// Builds `/accounts?accountId=` so issuer URLs with `/` never go in the path.
+    private func accountsURL(accountId: AccountID, invalidURLBody: String) throws -> URL {
+        guard var components = URLComponents(url: try endpoint("accounts"), resolvingAgainstBaseURL: false)
+        else {
+            throw RelayClientError.requestFailed(status: -1, body: "invalid relay accounts URL")
+        }
+        components.queryItems = [URLQueryItem(name: "accountId", value: accountId.rawValue)]
+        guard let url = components.url else {
+            throw RelayClientError.requestFailed(status: -1, body: invalidURLBody)
+        }
+        return url
     }
 
     private func endpoint(_ path: String) throws -> URL {
