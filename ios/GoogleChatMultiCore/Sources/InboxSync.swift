@@ -34,11 +34,25 @@ public actor InboxSyncService {
 
     public func refreshAccounts(_ accounts: [LinkedAccount]) async throws -> [ConversationSummary] {
         var merged: [ConversationSummary] = []
+        var failures = 0
+        var lastError: (any Error)?
+        // Preserve cached rows for accounts that fail so one bad token cannot wipe the inbox.
+        let cached = (try? await cache.loadConversations()) ?? []
 
         for account in accounts {
-            let spaces = try await listAllSpaces(accountId: account.id)
-            let summaries = try await fetchSummaries(account: account, spaces: spaces)
-            merged.append(contentsOf: summaries)
+            do {
+                let spaces = try await listAllSpaces(accountId: account.id)
+                let summaries = try await fetchSummaries(account: account, spaces: spaces)
+                merged.append(contentsOf: summaries)
+            } catch {
+                failures += 1
+                lastError = error
+                merged.append(contentsOf: cached.filter { $0.accountId == account.id })
+            }
+        }
+
+        if !accounts.isEmpty, failures == accounts.count, let lastError {
+            throw lastError
         }
 
         let sorted = InboxMerger.merge(merged)

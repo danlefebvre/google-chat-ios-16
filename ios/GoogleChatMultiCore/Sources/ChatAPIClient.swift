@@ -5,6 +5,8 @@ import FoundationNetworking
 
 public protocol TokenProviding: Sendable {
     func accessToken(for accountId: AccountID) async throws -> String
+    /// Drop any cached access token so the next `accessToken` call refreshes.
+    func invalidateAccessToken(for accountId: AccountID) async
 }
 
 public enum ChatAPIError: Error, Equatable, LocalizedError {
@@ -50,14 +52,9 @@ public actor ChatAPIClient {
         pageSize: Int = 100,
         pageToken: String? = nil
     ) async throws -> SpaceListResponse {
-        var components = URLComponents(
-            url: baseURL.appendingPathComponent("spaces"),
-            resolvingAgainstBaseURL: false
-        )!
         var items = [URLQueryItem(name: "pageSize", value: String(pageSize))]
         if let pageToken { items.append(URLQueryItem(name: "pageToken", value: pageToken)) }
-        components.queryItems = items
-        guard let url = components.url else { throw ChatAPIError.invalidURL }
+        let url = try makeURL(path: "spaces", queryItems: items)
         return try await get(url, accountId: accountId)
     }
 
@@ -67,17 +64,12 @@ public actor ChatAPIClient {
         pageSize: Int = 50,
         pageToken: String? = nil
     ) async throws -> MessageListResponse {
-        var components = URLComponents(
-            url: baseURL.appendingPathComponent("\(spaceName)/messages"),
-            resolvingAgainstBaseURL: false
-        )!
         var items = [
             URLQueryItem(name: "pageSize", value: String(pageSize)),
             URLQueryItem(name: "orderBy", value: "createTime desc"),
         ]
         if let pageToken { items.append(URLQueryItem(name: "pageToken", value: pageToken)) }
-        components.queryItems = items
-        guard let url = components.url else { throw ChatAPIError.invalidURL }
+        let url = try makeURL(path: "\(spaceName)/messages", queryItems: items)
         return try await get(url, accountId: accountId)
     }
 
@@ -88,15 +80,13 @@ public actor ChatAPIClient {
         pageSize: Int = 100,
         showInvited: Bool = false
     ) async throws -> MembershipListResponse {
-        var components = URLComponents(
-            url: baseURL.appendingPathComponent("\(spaceName)/members"),
-            resolvingAgainstBaseURL: false
-        )!
-        components.queryItems = [
-            URLQueryItem(name: "pageSize", value: String(pageSize)),
-            URLQueryItem(name: "showInvited", value: showInvited ? "true" : "false"),
-        ]
-        guard let url = components.url else { throw ChatAPIError.invalidURL }
+        let url = try makeURL(
+            path: "\(spaceName)/members",
+            queryItems: [
+                URLQueryItem(name: "pageSize", value: String(pageSize)),
+                URLQueryItem(name: "showInvited", value: showInvited ? "true" : "false"),
+            ]
+        )
         return try await get(url, accountId: accountId)
     }
 
@@ -106,7 +96,7 @@ public actor ChatAPIClient {
         text: String,
         attachmentUploadTokens: [String] = []
     ) async throws -> ChatMessage {
-        let url = baseURL.appendingPathComponent("\(spaceName)/messages")
+        let url = try makeURL(path: "\(spaceName)/messages")
         let attachments = attachmentUploadTokens.isEmpty
             ? nil
             : attachmentUploadTokens.map(CreateMessageAttachment.init(uploadToken:))
@@ -122,7 +112,7 @@ public actor ChatAPIClient {
         messageName: String,
         unicode: String
     ) async throws {
-        let url = baseURL.appendingPathComponent("\(messageName)/reactions")
+        let url = try makeURL(path: "\(messageName)/reactions")
         let _: EmptyResponse = try await post(
             url,
             accountId: accountId,
@@ -169,7 +159,7 @@ public actor ChatAPIClient {
         )
         request.httpBody = body
         try await authorize(&request, accountId: accountId)
-        return try await send(request)
+        return try await send(request, accountId: accountId)
     }
 
     public func getSpaceReadState(
@@ -197,10 +187,21 @@ public actor ChatAPIClient {
 
     private func spaceReadStateURL(spaceName: String) throws -> URL {
         let spaceId = spaceName.replacingOccurrences(of: "spaces/", with: "")
-        // Build with string concat so path slashes are not percent-encoded.
-        guard let url = URL(string: "\(baseURL.absoluteString)/users/me/spaces/\(spaceId)/spaceReadState") else {
+        return try makeURL(path: "users/me/spaces/\(spaceId)/spaceReadState")
+    }
+
+    /// Builds API URLs without percent-encoding `/` inside resource names
+    /// (`spaces/AAA/messages`). `URL.appendingPathComponent` would turn those
+    /// into `spaces%2FAAA%2Fmessages` and break Chat REST paths.
+    private func makeURL(path: String, queryItems: [URLQueryItem] = []) throws -> URL {
+        let trimmed = path.hasPrefix("/") ? String(path.dropFirst()) : path
+        guard var components = URLComponents(string: "\(baseURL.absoluteString)/\(trimmed)") else {
             throw ChatAPIError.invalidURL
         }
+        if !queryItems.isEmpty {
+            components.queryItems = queryItems
+        }
+        guard let url = components.url else { throw ChatAPIError.invalidURL }
         return url
     }
 
@@ -210,7 +211,7 @@ public actor ChatAPIClient {
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
         try await authorize(&request, accountId: accountId)
-        return try await send(request)
+        return try await send(request, accountId: accountId)
     }
 
     private func post<Body: Encodable, T: Decodable>(
@@ -223,7 +224,7 @@ public actor ChatAPIClient {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONEncoder.chat.encode(body)
         try await authorize(&request, accountId: accountId)
-        return try await send(request)
+        return try await send(request, accountId: accountId)
     }
 
     private func patch<Body: Encodable, T: Decodable>(
@@ -240,7 +241,7 @@ public actor ChatAPIClient {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONEncoder.chat.encode(body)
         try await authorize(&request, accountId: accountId)
-        return try await send(request)
+        return try await send(request, accountId: accountId)
     }
 
     private func authorize(_ request: inout URLRequest, accountId: AccountID) async throws {
@@ -248,9 +249,20 @@ public actor ChatAPIClient {
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
     }
 
-    private func send<T: Decodable>(_ request: URLRequest) async throws -> T {
+    private func send<T: Decodable>(
+        _ request: URLRequest,
+        accountId: AccountID,
+        allowRetry: Bool = true
+    ) async throws -> T {
         let (data, response) = try await session.dataCompat(for: request)
         let status = (response as? HTTPURLResponse)?.statusCode ?? -1
+        if status == 401, allowRetry {
+            // Access tokens expire ~1h; refresh once and retry the same request.
+            await tokens.invalidateAccessToken(for: accountId)
+            var retry = request
+            try await authorize(&retry, accountId: accountId)
+            return try await send(retry, accountId: accountId, allowRetry: false)
+        }
         guard (200..<300).contains(status) else {
             throw ChatAPIError.httpStatus(status)
         }

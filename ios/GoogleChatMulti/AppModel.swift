@@ -109,6 +109,7 @@ final class AppModel: ObservableObject {
         defer { isRefreshing = false }
         do {
             applyConversations(try await sync.refreshAccounts(accounts))
+            errorMessage = nil
         } catch {
             AppLog.inbox.error("refresh failed: \(error.localizedDescription, privacy: .public)")
             errorMessage = error.localizedDescription

@@ -183,6 +183,7 @@ private struct StubTokens: TokenProviding {
     func accessToken(for accountId: AccountID) async throws -> String {
         map[accountId.rawValue]!
     }
+    func invalidateAccessToken(for accountId: AccountID) async {}
 }
 
 private final class URLProtocolStub: URLProtocol {

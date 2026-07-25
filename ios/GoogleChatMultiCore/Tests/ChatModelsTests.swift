@@ -53,6 +53,18 @@ final class ChatModelsTests: XCTestCase {
         XCTAssertEqual(response.messages[0].emojiReactionSummaries?.first?.reactionCount, 2)
     }
 
+    func testDecodesSpaceListWhenSpacesKeyOmitted() throws {
+        let json = #"{"nextPageToken":null}"#.data(using: .utf8)!
+        let response = try JSONDecoder.chat.decode(SpaceListResponse.self, from: json)
+        XCTAssertTrue(response.spaces.isEmpty)
+    }
+
+    func testDecodesMessageListWhenMessagesKeyOmitted() throws {
+        let json = #"{}"#.data(using: .utf8)!
+        let response = try JSONDecoder.chat.decode(MessageListResponse.self, from: json)
+        XCTAssertTrue(response.messages.isEmpty)
+    }
+
     func testDecodesFractionalRFC3339Timestamps() throws {
         let json = """
         {

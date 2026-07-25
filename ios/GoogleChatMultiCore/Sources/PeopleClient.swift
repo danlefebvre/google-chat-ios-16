@@ -78,14 +78,7 @@ public actor PeopleClient {
 
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
-        let token = try await tokens.accessToken(for: accountId)
-        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-
-        let (data, response) = try await session.dataCompat(for: request)
-        let status = (response as? HTTPURLResponse)?.statusCode ?? -1
-        guard (200..<300).contains(status) else { throw ChatAPIError.httpStatus(status) }
-        guard !data.isEmpty else { throw ChatAPIError.emptyBody }
-
+        let data = try await authorizedData(for: &request, accountId: accountId)
         let decoded = try JSONDecoder().decode(PeopleBatchGetResponse.self, from: data)
         var map: [String: String] = [:]
         for entry in decoded.responses ?? [] {
@@ -134,13 +127,7 @@ public actor PeopleClient {
 
             var request = URLRequest(url: url)
             request.httpMethod = "GET"
-            let token = try await tokens.accessToken(for: accountId)
-            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-
-            let (data, response) = try await session.dataCompat(for: request)
-            let status = (response as? HTTPURLResponse)?.statusCode ?? -1
-            guard (200..<300).contains(status) else { throw ChatAPIError.httpStatus(status) }
-            guard !data.isEmpty else { throw ChatAPIError.emptyBody }
+            let data = try await authorizedData(for: &request, accountId: accountId)
 
             let decoded = try JSONDecoder().decode(OtherContactsListResponse.self, from: data)
             for person in decoded.otherContacts ?? [] {
@@ -152,6 +139,24 @@ public actor PeopleClient {
             pageToken = decoded.nextPageToken
         } while pageToken != nil && !(pageToken?.isEmpty ?? true)
         return map
+    }
+
+    private func authorizedData(
+        for request: inout URLRequest,
+        accountId: AccountID,
+        allowRetry: Bool = true
+    ) async throws -> Data {
+        let token = try await tokens.accessToken(for: accountId)
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        let (data, response) = try await session.dataCompat(for: request)
+        let status = (response as? HTTPURLResponse)?.statusCode ?? -1
+        if status == 401, allowRetry {
+            await tokens.invalidateAccessToken(for: accountId)
+            return try await authorizedData(for: &request, accountId: accountId, allowRetry: false)
+        }
+        guard (200..<300).contains(status) else { throw ChatAPIError.httpStatus(status) }
+        guard !data.isEmpty else { throw ChatAPIError.emptyBody }
+        return data
     }
 
     public static func peopleResourceName(fromChatUser chatUserName: String) -> String? {
@@ -273,9 +278,13 @@ private extension URLSession {
             let task = dataTask(with: request) { data, response, error in
                 if let error {
                     continuation.resume(throwing: error)
-                } else {
-                    continuation.resume(returning: (data ?? Data(), response ?? URLResponse()))
+                    return
                 }
+                guard let data, let response else {
+                    continuation.resume(throwing: URLError(.badServerResponse))
+                    return
+                }
+                continuation.resume(returning: (data, response))
             }
             task.resume()
         }

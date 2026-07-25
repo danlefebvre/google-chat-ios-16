@@ -123,6 +123,85 @@ final class InboxSyncTests: XCTestCase {
         XCTAssertEqual(rows.first?.unreadCount, 1)
     }
 
+    func testRefreshAccountsKeepsCachedRowsWhenOneAccountFails() async throws {
+        let good = LinkedAccount(
+            id: AccountID(issuer: "https://accounts.google.com", subject: "good"),
+            email: "good@example.com",
+            label: "Good",
+            colorHex: "#C45C26"
+        )
+        let bad = LinkedAccount(
+            id: AccountID(issuer: "https://accounts.google.com", subject: "bad"),
+            email: "bad@example.com",
+            label: "Bad",
+            colorHex: "#1F6FEB"
+        )
+        let cache = InMemoryConversationCache()
+        try await cache.replaceConversations([
+            ConversationSummary(
+                accountId: bad.id,
+                accountLabel: "Bad",
+                accountColorHex: "#1F6FEB",
+                spaceName: "spaces/CACHED",
+                title: "Cached",
+                lastMessagePreview: "old",
+                lastActivityAt: Date(timeIntervalSince1970: 1),
+                unreadCount: 0,
+                isDirectMessage: false
+            ),
+        ])
+
+        URLProtocolStub.handler = { request in
+            let auth = request.value(forHTTPHeaderField: "Authorization") ?? ""
+            if auth.contains("bad") {
+                return (
+                    HTTPURLResponse(url: request.url!, statusCode: 401, httpVersion: nil, headerFields: nil)!,
+                    Data()
+                )
+            }
+            let url = request.url!.absoluteString
+            if url.contains("spaceReadState") {
+                let json = #"{"name":"users/me/spaces/A/spaceReadState","lastReadTime":"2020-01-01T00:00:00Z"}"#
+                    .data(using: .utf8)!
+                return (
+                    HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
+                    json
+                )
+            }
+            if url.contains("/messages") {
+                return (
+                    HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
+                    #"{"messages":[]}"#.data(using: .utf8)!
+                )
+            }
+            if url.contains("/spaces") {
+                let json = #"{"spaces":[{"name":"spaces/A","displayName":"One","spaceType":"SPACE"}]}"#
+                    .data(using: .utf8)!
+                return (
+                    HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
+                    json
+                )
+            }
+            return (
+                HTTPURLResponse(url: request.url!, statusCode: 404, httpVersion: nil, headerFields: nil)!,
+                Data()
+            )
+        }
+
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [URLProtocolStub.self]
+        let client = ChatAPIClient(
+            tokens: StubTokens([
+                "\(good.id.rawValue)": "good-tok",
+                "\(bad.id.rawValue)": "bad-tok",
+            ]),
+            session: URLSession(configuration: config)
+        )
+        let sync = InboxSyncService(api: client, cache: cache)
+        let rows = try await sync.refreshAccounts([good, bad])
+        XCTAssertEqual(Set(rows.map(\.spaceName)), Set(["spaces/A", "spaces/CACHED"]))
+    }
+
     func testReplaceConversationsDropsStaleRows() async throws {
         let cache = InMemoryConversationCache()
         let account = AccountID(issuer: "https://accounts.google.com", subject: "work")
@@ -163,6 +242,7 @@ private struct StubTokens: TokenProviding {
     func accessToken(for accountId: AccountID) async throws -> String {
         map[accountId.rawValue]!
     }
+    func invalidateAccessToken(for accountId: AccountID) async {}
 }
 
 private final class URLProtocolStub: URLProtocol {
