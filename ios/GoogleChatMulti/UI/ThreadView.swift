@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import GoogleChatMultiCore
 import PhotosUI
 
@@ -422,6 +423,8 @@ struct MessageBubble: View {
     let tokenProvider: (any TokenProviding)?
     let onReact: (String) async -> Void
 
+    @State private var showReactionPicker = false
+
     private var textBody: String? {
         let trimmed = message.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         return trimmed.isEmpty ? nil : trimmed
@@ -475,6 +478,24 @@ struct MessageBubble: View {
                 .padding(10)
                 .background(isFromSelf ? Color.accentColor : Color("BubbleFill"))
                 .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .onLongPressGesture(minimumDuration: 0.35) {
+                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                    withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
+                        showReactionPicker.toggle()
+                    }
+                }
+
+                if showReactionPicker {
+                    ReactionIconsPopup(
+                        alignment: isFromSelf ? .trailing : .leading,
+                        onSelect: { emoji in
+                            showReactionPicker = false
+                            Task { await onReact(emoji) }
+                        }
+                    )
+                    .transition(.scale(scale: 0.85, anchor: isFromSelf ? .topTrailing : .topLeading).combined(with: .opacity))
+                    .zIndex(1)
+                }
 
                 if showSeen && isFromSelf {
                     Text("Seen")
@@ -518,6 +539,38 @@ struct MessageBubble: View {
 
             if !isFromSelf { Spacer(minLength: 48) }
         }
+    }
+}
+
+/// Floating quick-reaction strip shown after a long-press on a message bubble.
+private struct ReactionIconsPopup: View {
+    let alignment: HorizontalAlignment
+    let onSelect: (String) -> Void
+
+    var body: some View {
+        HStack(spacing: 2) {
+            ForEach(ChatQuickReactions.all, id: \.self) { emoji in
+                Button {
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    onSelect(emoji)
+                } label: {
+                    Text(emoji)
+                        .font(.title3)
+                        .frame(width: 36, height: 36)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, 6)
+        .padding(.vertical, 4)
+        .background(.ultraThinMaterial, in: Capsule())
+        .overlay(
+            Capsule()
+                .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.12), radius: 10, y: 4)
+        .frame(maxWidth: .infinity, alignment: Alignment(horizontal: alignment, vertical: .center))
     }
 }
 
