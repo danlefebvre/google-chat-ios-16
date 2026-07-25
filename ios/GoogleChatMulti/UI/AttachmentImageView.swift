@@ -2,7 +2,7 @@ import SwiftUI
 import UIKit
 import GoogleChatMultiCore
 
-/// Downloads Chat attachment bytes via the media API and shows an image (iPhone 8–safe cap).
+/// Downloads Chat attachment bytes via the media API and shows an image.
 struct AttachmentImageView: View {
     let attachment: ChatAttachment
     let accountId: AccountID
@@ -65,8 +65,6 @@ struct AttachmentImageView: View {
             } else {
                 errorText = attachment.contentName ?? "Could not decode image"
             }
-        } catch MediaClientError.tooLarge {
-            errorText = "Image too large"
         } catch {
             AppLog.inbox.error(
                 "attachment download failed: \(error.localizedDescription, privacy: .public)"

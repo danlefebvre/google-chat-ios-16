@@ -17,7 +17,6 @@
 		A10000000000000000000008 /* InboxView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000008 /* InboxView.swift */; };
 		A10000000000000000000009 /* ThreadView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000009 /* ThreadView.swift */; };
 		A1000000000000000000000A /* AccountManagerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000000A /* AccountManagerView.swift */; };
-		A1000000000000000000000B /* AttachmentMemory.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000000B /* AttachmentMemory.swift */; };
 		A1000000000000000000000C /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000000C /* Assets.xcassets */; };
 		A1000000000000000000000D /* GoogleChatMultiCore in Frameworks */ = {isa = PBXBuildFile; productRef = A30000000000000000000001 /* GoogleChatMultiCore */; };
 		A1000000000000000000000E /* AppBootstrap.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000000F /* AppBootstrap.swift */; };
@@ -38,7 +37,6 @@
 		A20000000000000000000008 /* InboxView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InboxView.swift; sourceTree = "<group>"; };
 		A20000000000000000000009 /* ThreadView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThreadView.swift; sourceTree = "<group>"; };
 		A2000000000000000000000A /* AccountManagerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountManagerView.swift; sourceTree = "<group>"; };
-		A2000000000000000000000B /* AttachmentMemory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttachmentMemory.swift; sourceTree = "<group>"; };
 		A2000000000000000000000C /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		A2000000000000000000000D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A2000000000000000000000E /* GoogleChatMulti.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = GoogleChatMulti.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -82,7 +80,6 @@
 				A50000000000000000000005 /* Persistence */,
 				A50000000000000000000006 /* Networking */,
 				A50000000000000000000007 /* UI */,
-				A50000000000000000000008 /* Media */,
 			);
 			path = GoogleChatMulti;
 			sourceTree = "<group>";
@@ -131,14 +128,6 @@
 				A2000000000000000000000A /* AccountManagerView.swift */,
 			);
 			path = UI;
-			sourceTree = "<group>";
-		};
-		A50000000000000000000008 /* Media */ = {
-			isa = PBXGroup;
-			children = (
-				A2000000000000000000000B /* AttachmentMemory.swift */,
-			);
-			path = Media;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -232,7 +221,6 @@
 				A10000000000000000000012 /* AttachmentImageView.swift in Sources */,
 				A10000000000000000000013 /* FullScreenImageViewer.swift in Sources */,
 				A1000000000000000000000A /* AccountManagerView.swift in Sources */,
-				A1000000000000000000000B /* AttachmentMemory.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

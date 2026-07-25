@@ -1,14 +1,12 @@
 import XCTest
 @testable import GoogleChatMultiCore
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 
 final class MediaClientTests: XCTestCase {
-    func testTooLargeErrorEquatable() {
-        XCTAssertEqual(MediaClientError.tooLarge(10, 5), MediaClientError.tooLarge(10, 5))
-        XCTAssertNotEqual(MediaClientError.tooLarge(10, 5), MediaClientError.tooLarge(11, 5))
-    }
-
-    func testDefaultMaxBytesMatchesIPhone8Budget() {
+    func testDefaultInitUsesSharedSession() {
         let client = MediaClient()
-        XCTAssertEqual(client.maxBytes, 1_500_000)
+        XCTAssertTrue(client.session === URLSession.shared)
     }
 }

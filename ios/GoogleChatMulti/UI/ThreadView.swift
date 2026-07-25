@@ -294,13 +294,12 @@ struct ThreadView: View {
         }
         do {
             guard let data = try await item.loadTransferable(type: Data.self) else { return }
-            let limited = AttachmentMemory.limitImageData(data, maxBytes: 1_500_000)
             let uploaded = try await api.uploadAttachment(
                 accountId: conversation.accountId,
                 spaceName: conversation.spaceName,
                 filename: "photo.jpg",
                 mimeType: "image/jpeg",
-                data: limited
+                data: data
             )
             guard let token = uploaded.attachmentUploadToken else {
                 model.banner = "Upload succeeded but no attachment token returned."
