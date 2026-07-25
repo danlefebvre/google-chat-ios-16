@@ -8,6 +8,7 @@ struct AttachmentImageView: View {
     let accountId: AccountID
     let tokenProvider: any TokenProviding
 
+    @EnvironmentObject private var model: AppModel
     @State private var image: UIImage?
     @State private var errorText: String?
     @State private var isLoading = false
@@ -32,9 +33,21 @@ struct AttachmentImageView: View {
                 ProgressView()
                     .frame(width: 80, height: 80)
             } else if let errorText {
-                Label(errorText, systemImage: "exclamationmark.triangle")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
+                if errorText == Self.loadFailureText {
+                    Button {
+                        Task { await load(isRetry: true) }
+                    } label: {
+                        Label(errorText, systemImage: "exclamationmark.triangle")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityHint("Retries loading the image")
+                } else {
+                    Label(errorText, systemImage: "exclamationmark.triangle")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
             } else {
                 Label(attachment.contentName ?? "Attachment", systemImage: "photo")
                     .font(.caption)
@@ -46,12 +59,15 @@ struct AttachmentImageView: View {
         }
     }
 
-    private func load() async {
+    private static let loadFailureText = "Couldn't load image"
+
+    private func load(isRetry: Bool = false) async {
         guard image == nil, !isLoading else { return }
         guard let resource = attachment.mediaResourceName else {
             errorText = attachment.contentName ?? "Unsupported attachment"
             return
         }
+        errorText = nil
         isLoading = true
         defer { isLoading = false }
         do {
@@ -69,7 +85,10 @@ struct AttachmentImageView: View {
             AppLog.inbox.error(
                 "attachment download failed: \(error.localizedDescription, privacy: .public)"
             )
-            errorText = "Couldn't load image"
+            errorText = Self.loadFailureText
+            if isRetry {
+                model.banner = error.localizedDescription
+            }
         }
     }
 }
