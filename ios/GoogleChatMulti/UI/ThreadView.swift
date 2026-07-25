@@ -110,7 +110,7 @@ struct ThreadView: View {
         .background(Color("CanvasBackground").ignoresSafeArea())
     }
 
-    private func load() async {
+    private func load(scrollToNewest: Bool = true) async {
         guard let conversation,
               let api = await apiClient()
         else { return }
@@ -120,6 +120,7 @@ struct ThreadView: View {
         memberNames[me] = "You"
         isLoadingOlder = false
         nextPageToken = nil
+        scrollToNewestRequested = false
         preserveScrollMessageId = nil
 
         do {
@@ -162,7 +163,7 @@ struct ThreadView: View {
             map[me] = "You"
             memberNames = map
             nextPageToken = response.nextPageToken
-            scrollToNewestRequested = true
+            scrollToNewestRequested = scrollToNewest && !response.messages.isEmpty
             messages = response.messages
             do {
                 try await api.markSpaceRead(
@@ -276,7 +277,7 @@ struct ThreadView: View {
                 messageName: message.name,
                 unicode: unicode
             )
-            await load()
+            await load(scrollToNewest: false)
         } catch {
             model.banner = "Reaction failed."
         }
