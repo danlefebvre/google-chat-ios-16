@@ -278,9 +278,13 @@ private extension URLSession {
             let task = dataTask(with: request) { data, response, error in
                 if let error {
                     continuation.resume(throwing: error)
-                } else {
-                    continuation.resume(returning: (data ?? Data(), response ?? URLResponse()))
+                    return
                 }
+                guard let data, let response else {
+                    continuation.resume(throwing: URLError(.badServerResponse))
+                    return
+                }
+                continuation.resume(returning: (data, response))
             }
             task.resume()
         }

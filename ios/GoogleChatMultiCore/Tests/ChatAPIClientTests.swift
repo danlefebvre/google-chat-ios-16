@@ -112,7 +112,7 @@ final class ChatAPIClientTests: XCTestCase {
                     Data()
                 )
             }
-            let json = #"{"spaces":[{"name":"spaces/AAA","displayName":"#eng","spaceType":"SPACE"}]}"#
+            let json = ##"{"spaces":[{"name":"spaces/AAA","displayName":"eng","spaceType":"SPACE"}]}"##
                 .data(using: .utf8)!
             return (
                 HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
