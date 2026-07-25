@@ -131,17 +131,61 @@ public final class KeychainAccountAuthStore: AccountAuthStore {
 /// Keychain/in-memory stores serialize credential access; mark unchecked Sendable for ChatAPIClient.
 private struct AuthTokenProvider: TokenProviding, @unchecked Sendable {
     let store: AccountAuthStore
+    /// Coalesces concurrent refresh work per account after a 401 invalidate.
+    private let refreshGate: TokenRefreshGate
+
+    init(store: AccountAuthStore, refreshGate: TokenRefreshGate = TokenRefreshGate()) {
+        self.store = store
+        self.refreshGate = refreshGate
+    }
 
     func accessToken(for accountId: AccountID) async throws -> String {
         if let token = store.accessToken(for: accountId), !token.isEmpty {
             return token
         }
-        guard let refresh = store.refreshToken(for: accountId), !refresh.isEmpty else {
-            throw ChatAPIError.httpStatus(401)
+        return try await refreshGate.refresh(accountId: accountId) {
+            // Another waiter may have refreshed while we were queued.
+            if let token = self.store.accessToken(for: accountId), !token.isEmpty {
+                return token
+            }
+            guard let refresh = self.store.refreshToken(for: accountId), !refresh.isEmpty else {
+                throw ChatAPIError.httpStatus(401)
+            }
+            let refreshed = try await GoogleOAuthTokenRefresher.refresh(refreshToken: refresh)
+            self.store.updateAccessToken(for: accountId, accessToken: refreshed)
+            return refreshed
         }
-        let refreshed = try await GoogleOAuthTokenRefresher.refresh(refreshToken: refresh)
-        store.updateAccessToken(for: accountId, accessToken: refreshed)
-        return refreshed
+    }
+
+    func invalidateAccessToken(for accountId: AccountID) async {
+        store.updateAccessToken(for: accountId, accessToken: "")
+    }
+}
+
+/// Serializes OAuth refresh per account so parallel 401 retries share one refresh.
+private final class TokenRefreshGate: @unchecked Sendable {
+    private let lock = NSLock()
+    private var inflight: [String: Task<String, Error>] = [:]
+
+    func refresh(
+        accountId: AccountID,
+        _ body: @escaping @Sendable () async throws -> String
+    ) async throws -> String {
+        let key = accountId.rawValue
+        lock.lock()
+        if let existing = inflight[key] {
+            lock.unlock()
+            return try await existing.value
+        }
+        let task = Task { try await body() }
+        inflight[key] = task
+        lock.unlock()
+        defer {
+            lock.lock()
+            inflight[key] = nil
+            lock.unlock()
+        }
+        return try await task.value
     }
 }
 

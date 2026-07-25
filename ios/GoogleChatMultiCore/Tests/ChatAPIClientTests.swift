@@ -72,13 +72,94 @@ final class ChatAPIClientTests: XCTestCase {
         )
         XCTAssertEqual(message.text, "hello")
     }
+
+    func testListMessagesKeepsSlashInSpaceResourcePath() async throws {
+        let account = AccountID(issuer: "https://accounts.google.com", subject: "work")
+        URLProtocolStub.handler = { request in
+            let path = request.url?.path ?? ""
+            XCTAssertTrue(path.contains("/spaces/AAA/messages"), "got \(path)")
+            XCTAssertFalse(path.contains("spaces%2F"), "got \(path)")
+            let json = #"{"messages":[]}"#.data(using: .utf8)!
+            return (
+                HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
+                json
+            )
+        }
+
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [URLProtocolStub.self]
+        let client = ChatAPIClient(
+            tokens: StubTokens(["\(account.rawValue)": "tok"]),
+            session: URLSession(configuration: config)
+        )
+        _ = try await client.listMessages(accountId: account, spaceName: "spaces/AAA", pageSize: 1)
+    }
+
+    func testListSpacesRetriesOnceAfter401WithRefreshedToken() async throws {
+        let account = AccountID(issuer: "https://accounts.google.com", subject: "work")
+        let tokens = StubTokens(
+            ["\(account.rawValue)": "expired-tok"],
+            refreshMap: ["\(account.rawValue)": "fresh-tok"]
+        )
+        var seenAuth: [String] = []
+
+        URLProtocolStub.handler = { request in
+            let auth = request.value(forHTTPHeaderField: "Authorization") ?? ""
+            seenAuth.append(auth)
+            if auth.contains("expired-tok") {
+                return (
+                    HTTPURLResponse(url: request.url!, statusCode: 401, httpVersion: nil, headerFields: nil)!,
+                    Data()
+                )
+            }
+            let json = #"{"spaces":[{"name":"spaces/AAA","displayName":"#eng","spaceType":"SPACE"}]}"#
+                .data(using: .utf8)!
+            return (
+                HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
+                json
+            )
+        }
+
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [URLProtocolStub.self]
+        let client = ChatAPIClient(
+            tokens: tokens,
+            session: URLSession(configuration: config)
+        )
+
+        let result = try await client.listSpaces(accountId: account)
+        XCTAssertEqual(result.spaces.first?.name, "spaces/AAA")
+        XCTAssertEqual(tokens.invalidateCount, 1)
+        XCTAssertEqual(seenAuth, ["Bearer expired-tok", "Bearer fresh-tok"])
+    }
 }
 
-private struct StubTokens: TokenProviding {
-    let map: [String: String]
-    init(_ map: [String: String]) { self.map = map }
+private final class StubTokens: TokenProviding, @unchecked Sendable {
+    private var map: [String: String]
+    private var refreshMap: [String: String]
+    private(set) var invalidateCount = 0
+    private(set) var accessCalls = 0
+
+    init(_ map: [String: String], refreshMap: [String: String] = [:]) {
+        self.map = map
+        self.refreshMap = refreshMap
+    }
+
     func accessToken(for accountId: AccountID) async throws -> String {
-        map[accountId.rawValue]!
+        accessCalls += 1
+        if let token = map[accountId.rawValue], !token.isEmpty {
+            return token
+        }
+        if let refreshed = refreshMap[accountId.rawValue], !refreshed.isEmpty {
+            map[accountId.rawValue] = refreshed
+            return refreshed
+        }
+        throw ChatAPIError.httpStatus(401)
+    }
+
+    func invalidateAccessToken(for accountId: AccountID) async {
+        invalidateCount += 1
+        map[accountId.rawValue] = ""
     }
 }
 

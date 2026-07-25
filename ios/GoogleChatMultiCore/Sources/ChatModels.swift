@@ -48,9 +48,16 @@ public struct SpaceListResponse: Codable, Sendable {
     public var spaces: [ChatSpace]
     public var nextPageToken: String?
 
-    public init(spaces: [ChatSpace], nextPageToken: String? = nil) {
+    public init(spaces: [ChatSpace] = [], nextPageToken: String? = nil) {
         self.spaces = spaces
         self.nextPageToken = nextPageToken
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        // Google may omit empty repeated fields.
+        spaces = try container.decodeIfPresent([ChatSpace].self, forKey: .spaces) ?? []
+        nextPageToken = try container.decodeIfPresent(String.self, forKey: .nextPageToken)
     }
 }
 
@@ -87,9 +94,15 @@ public struct MessageListResponse: Codable, Sendable {
     public var messages: [ChatMessage]
     public var nextPageToken: String?
 
-    public init(messages: [ChatMessage], nextPageToken: String? = nil) {
+    public init(messages: [ChatMessage] = [], nextPageToken: String? = nil) {
         self.messages = messages
         self.nextPageToken = nextPageToken
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        messages = try container.decodeIfPresent([ChatMessage].self, forKey: .messages) ?? []
+        nextPageToken = try container.decodeIfPresent(String.self, forKey: .nextPageToken)
     }
 }
 
@@ -163,9 +176,15 @@ public struct MembershipListResponse: Codable, Sendable {
     public var memberships: [ChatMembership]
     public var nextPageToken: String?
 
-    public init(memberships: [ChatMembership], nextPageToken: String? = nil) {
+    public init(memberships: [ChatMembership] = [], nextPageToken: String? = nil) {
         self.memberships = memberships
         self.nextPageToken = nextPageToken
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        memberships = try container.decodeIfPresent([ChatMembership].self, forKey: .memberships) ?? []
+        nextPageToken = try container.decodeIfPresent(String.self, forKey: .nextPageToken)
     }
 }
 
