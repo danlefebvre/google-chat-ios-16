@@ -86,8 +86,8 @@ struct FilterChipBar: View {
             HStack(spacing: 8) {
                 chip("All", selected: selection == .all) { selection = .all }
                 ForEach(accounts) { account in
-                    chip(account.label, selected: selection == .accountLabel(account.label)) {
-                        selection = .accountLabel(account.label)
+                    chip(account.label, selected: selection == .accountId(account.id)) {
+                        selection = .accountId(account.id)
                     }
                 }
             }

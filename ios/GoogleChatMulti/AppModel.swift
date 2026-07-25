@@ -169,8 +169,7 @@ final class AppModel: ObservableObject {
         let trimmedLabel = label.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedLabel.isEmpty else { return }
         guard var account = accounts.first(where: { $0.id == accountId }) else { return }
-        let previousLabel = account.label
-        let labelChanged = previousLabel != trimmedLabel
+        let labelChanged = account.label != trimmedLabel
         let colorChanged = account.colorHex != colorHex
         guard labelChanged || colorChanged else { return }
 
@@ -185,12 +184,7 @@ final class AppModel: ObservableObject {
         }
         authStore.save(account: account, refreshToken: refresh, accessToken: access)
         accounts = authStore.loadAccounts()
-
-        if case let .accountLabel(selected) = filter,
-           selected.caseInsensitiveCompare(previousLabel) == .orderedSame
-        {
-            filter = .accountLabel(trimmedLabel)
-        }
+        // Inbox filter chips select by accountId, so renames keep the active account.
 
         let updatedRows = conversations.map { row -> ConversationSummary in
             guard row.accountId == accountId else { return row }
