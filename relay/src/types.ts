@@ -22,7 +22,7 @@ export type QuietHours = {
 export type NtfyConfig = {
   baseUrl: string;
   topic: string;
-  accessToken: string;
+  accessToken?: string;
 };
 
 export type ParsedChatEvent = {

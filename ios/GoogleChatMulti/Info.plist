@@ -33,14 +33,14 @@
 			<string>com.googlechatmulti.google</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>com.googleusercontent.apps.REPLACE_WITH_CLIENT_ID</string>
+				<string>com.googleusercontent.apps.740346641921-jicrse28bht7m14djcn47strpkdolfaf</string>
 			</array>
 		</dict>
 	</array>
 	<key>CFBundleVersion</key>
 	<string>1</string>
 	<key>GIDClientID</key>
-	<string>REPLACE_WITH_GOOGLE_CLIENT_ID.apps.googleusercontent.com</string>
+	<string>740346641921-jicrse28bht7m14djcn47strpkdolfaf.apps.googleusercontent.com</string>
 	<key>RELAY_BASE_URL</key>
 	<string>https://YOUR_RELAY_HOST</string>
 	<key>LSRequiresIPhoneOS</key>

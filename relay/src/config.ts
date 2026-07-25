@@ -7,7 +7,8 @@ const envSchema = z.object({
   RELAY_TOKEN_SECRET: z.string().min(16),
   NTFY_BASE_URL: z.string().url().default("https://ntfy.sh"),
   NTFY_TOPIC: z.string().min(8),
-  NTFY_ACCESS_TOKEN: z.string().min(1),
+  /** Optional — omit for open/secret-topic ntfy.sh usage without auth. */
+  NTFY_ACCESS_TOKEN: z.string().optional(),
   DEEP_LINK_SCHEME: z.string().default("googlechatmulti"),
   /** Optional shared secret for Pub/Sub push verification (`?token=`). */
   PUBSUB_VERIFY_TOKEN: z.string().min(8).optional(),
@@ -71,7 +72,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     ntfy: {
       baseUrl: parsed.NTFY_BASE_URL,
       topic: parsed.NTFY_TOPIC,
-      accessToken: parsed.NTFY_ACCESS_TOKEN,
+      accessToken: parsed.NTFY_ACCESS_TOKEN || undefined,
     },
     deepLinkScheme: parsed.DEEP_LINK_SCHEME,
     google: googleReady

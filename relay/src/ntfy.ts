@@ -40,7 +40,7 @@ export function formatNtfyNotification(input: FormatNotificationInput): {
 export type NtfyPublisherOptions = {
   baseUrl: string;
   topic: string;
-  accessToken: string;
+  accessToken?: string;
   maxRetries?: number;
   retryDelayMs?: number;
   requestTimeoutMs?: number;
@@ -50,7 +50,7 @@ export type NtfyPublisherOptions = {
 export class NtfyPublisher {
   private readonly baseUrl: string;
   private readonly topic: string;
-  private readonly accessToken: string;
+  private readonly accessToken?: string;
   private readonly maxRetries: number;
   private readonly retryDelayMs: number;
   private readonly requestTimeoutMs: number;
@@ -79,7 +79,9 @@ export class NtfyPublisher {
         const response = await this.fetchImpl(url, {
           method: "POST",
           headers: {
-            Authorization: `Bearer ${this.accessToken}`,
+            ...(this.accessToken
+              ? { Authorization: `Bearer ${this.accessToken}` }
+              : {}),
             Title: encodeNtfyHeader(input.title),
             ...(input.tags?.length ? { Tags: input.tags.join(",") } : {}),
             ...(input.clickUrl ? { Click: input.clickUrl } : {}),
