@@ -16,29 +16,20 @@ export type FormatNotificationInput = {
   spaceTitle: string;
   senderName: string;
   messageText: string;
-  maxBodyLength?: number;
 };
 
 export function formatPushNotification(input: FormatNotificationInput): {
   title: string;
   body: string;
 } {
-  const maxBodyLength = input.maxBodyLength ?? 200;
   const text =
     input.messageText.trim().length > 0
       ? input.messageText.trim()
       : "(attachment or empty message)";
-  const prefix = `${input.senderName}: `;
-  const available = Math.max(0, maxBodyLength - prefix.length);
-  let bodyText = text;
-  if (bodyText.length > available) {
-    const cut = Math.max(0, available - 1);
-    bodyText = `${bodyText.slice(0, cut)}…`;
-  }
 
   return {
     title: `[${input.accountLabel}] ${input.spaceTitle}`,
-    body: `${prefix}${bodyText}`,
+    body: `${input.senderName}: ${text}`,
   };
 }
 

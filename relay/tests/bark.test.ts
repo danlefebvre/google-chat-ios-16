@@ -5,7 +5,7 @@ import {
 } from "../src/bark.js";
 
 describe("formatPushNotification", () => {
-  it("formats title as [Account] space and body as sender + truncated text", () => {
+  it("formats title as [Account] space and body as sender + full text", () => {
     const result = formatPushNotification({
       accountLabel: "Work",
       spaceTitle: "#eng-standup",
@@ -17,19 +17,16 @@ describe("formatPushNotification", () => {
     expect(result.body).toBe("Alice: deploy looks good");
   });
 
-  it("truncates long message previews", () => {
+  it("keeps long received message text untruncated", () => {
     const long = "x".repeat(300);
     const result = formatPushNotification({
       accountLabel: "Personal",
       spaceTitle: "Family",
       senderName: "Mom",
       messageText: long,
-      maxBodyLength: 80,
     });
 
-    expect(result.body.length).toBeLessThanOrEqual(80);
-    expect(result.body.startsWith("Mom: ")).toBe(true);
-    expect(result.body.endsWith("…")).toBe(true);
+    expect(result.body).toBe(`Mom: ${long}`);
   });
 
   it("falls back when message text is empty", () => {
