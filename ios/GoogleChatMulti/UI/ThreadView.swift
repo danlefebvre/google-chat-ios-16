@@ -30,10 +30,11 @@ struct ThreadView: View {
                         ForEach(messages.reversed()) { message in
                             MessageBubble(
                                 message: message,
-                                senderLabel: senderLabel(for: message)
-                            ) {
-                                await react(to: message, unicode: "👍")
-                            }
+                                senderLabel: senderLabel(for: message),
+                                onReact: { unicode in
+                                    await react(to: message, unicode: unicode)
+                                }
+                            )
                             .id(message.id)
                         }
                     }
@@ -190,10 +191,15 @@ struct ThreadView: View {
     }
 }
 
+/// Quick reactions aligned with Google Chat’s common set (API accepts any unicode emoji).
+enum ChatQuickReactions {
+    static let all: [String] = ["👍", "😂", "🎉", "❤️", "😮", "😢", "🙏", "🔥"]
+}
+
 struct MessageBubble: View {
     let message: ChatMessage
     let senderLabel: String
-    let onReact: () async -> Void
+    let onReact: (String) async -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -205,19 +211,38 @@ struct MessageBubble: View {
                 .padding(10)
                 .background(Color("BubbleFill"))
                 .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+
             if let reactions = message.emojiReactionSummaries, !reactions.isEmpty {
-                HStack {
+                HStack(spacing: 6) {
                     ForEach(Array(reactions.enumerated()), id: \.offset) { _, reaction in
-                        Text("\(reaction.emoji?.unicode ?? "") \(reaction.reactionCount ?? 0)")
-                            .font(.caption2)
+                        let emoji = reaction.emoji?.unicode ?? ""
+                        Button {
+                            guard !emoji.isEmpty else { return }
+                            Task { await onReact(emoji) }
+                        } label: {
+                            Text("\(emoji) \(reaction.reactionCount ?? 0)")
+                                .font(.caption2)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(Color("ChipFill"))
+                                .clipShape(Capsule())
+                        }
+                        .buttonStyle(.borderless)
                     }
                 }
             }
-            Button("👍") {
-                Task { await onReact() }
+
+            Menu {
+                ForEach(ChatQuickReactions.all, id: \.self) { emoji in
+                    Button(emoji) {
+                        Task { await onReact(emoji) }
+                    }
+                }
+            } label: {
+                Label("React", systemImage: "face.smiling")
+                    .font(.caption)
+                    .foregroundStyle(Color("SecondaryText"))
             }
-            .font(.caption)
-            .buttonStyle(.borderless)
         }
     }
 }
