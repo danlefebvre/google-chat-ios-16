@@ -1,9 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { NtfyPublisher, formatNtfyNotification } from "../src/ntfy.js";
+import {
+  BarkPublisher,
+  formatPushNotification,
+} from "../src/bark.js";
 
-describe("formatNtfyNotification", () => {
+describe("formatPushNotification", () => {
   it("formats title as [Account] space and body as sender + truncated text", () => {
-    const result = formatNtfyNotification({
+    const result = formatPushNotification({
       accountLabel: "Work",
       spaceTitle: "#eng-standup",
       senderName: "Alice",
@@ -16,7 +19,7 @@ describe("formatNtfyNotification", () => {
 
   it("truncates long message previews", () => {
     const long = "x".repeat(300);
-    const result = formatNtfyNotification({
+    const result = formatPushNotification({
       accountLabel: "Personal",
       spaceTitle: "Family",
       senderName: "Mom",
@@ -30,7 +33,7 @@ describe("formatNtfyNotification", () => {
   });
 
   it("falls back when message text is empty", () => {
-    const result = formatNtfyNotification({
+    const result = formatPushNotification({
       accountLabel: "Work",
       spaceTitle: "DM · Sam",
       senderName: "Sam",
@@ -41,12 +44,12 @@ describe("formatNtfyNotification", () => {
   });
 });
 
-describe("NtfyPublisher", () => {
+describe("BarkPublisher", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
   });
 
-  it("POSTs to ntfy.sh topic with title, body, and auth token", async () => {
+  it("POSTs JSON to Bark with title, body, badge, and click url", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
@@ -54,28 +57,32 @@ describe("NtfyPublisher", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    const publisher = new NtfyPublisher({
-      baseUrl: "https://ntfy.sh",
-      topic: "secret-topic-abc",
-      accessToken: "tk_test",
+    const publisher = new BarkPublisher({
+      baseUrl: "https://api.day.app",
+      deviceKey: "device-key-abc",
     });
 
     await publisher.publish({
       title: "[Work] #eng-standup",
       body: "Alice: deploy looks good",
-      tags: ["speech_balloon"],
-      clickUrl: "googlechatmulti://space/spaces/AAA",
+      badge: 3,
+      url: "googlechatmulti://space/spaces%2FAAA?accountId=iss%7Csub",
+      group: "google-chat",
     });
 
     expect(fetchMock).toHaveBeenCalledOnce();
     const [url, init] = fetchMock.mock.calls[0]!;
-    expect(url).toBe("https://ntfy.sh/secret-topic-abc");
+    expect(url).toBe("https://api.day.app/device-key-abc");
     expect(init.method).toBe("POST");
-    expect(init.headers["Authorization"]).toBe("Bearer tk_test");
-    expect(init.headers["Title"]).toBe("[Work] #eng-standup");
-    expect(init.headers["Tags"]).toBe("speech_balloon");
-    expect(init.headers["Click"]).toBe("googlechatmulti://space/spaces/AAA");
-    expect(init.body).toBe("Alice: deploy looks good");
+    expect(init.headers["Content-Type"]).toContain("application/json");
+    expect(JSON.parse(init.body as string)).toEqual({
+      title: "[Work] #eng-standup",
+      body: "Alice: deploy looks good",
+      badge: 3,
+      url: "googlechatmulti://space/spaces%2FAAA?accountId=iss%7Csub",
+      group: "google-chat",
+      sound: "birdsong",
+    });
     expect(init.signal).toBeInstanceOf(AbortSignal);
   });
 
@@ -87,17 +94,16 @@ describe("NtfyPublisher", () => {
       .mockResolvedValueOnce({ ok: false, status: 503, text: async () => "busy" });
     vi.stubGlobal("fetch", fetchMock);
 
-    const publisher = new NtfyPublisher({
-      baseUrl: "https://ntfy.sh",
-      topic: "t",
-      accessToken: "tk",
+    const publisher = new BarkPublisher({
+      baseUrl: "https://api.day.app",
+      deviceKey: "k",
       maxRetries: 2,
       retryDelayMs: 0,
     });
 
     await expect(
       publisher.publish({ title: "t", body: "b" }),
-    ).rejects.toThrow(/ntfy publish failed/i);
+    ).rejects.toThrow(/Bark publish failed/i);
 
     expect(fetchMock).toHaveBeenCalledTimes(3);
   });

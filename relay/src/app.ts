@@ -8,15 +8,15 @@ import {
   createGoogleEventsClient,
   type AccountOwnershipVerifier,
 } from "./google.js";
-import { formatNtfyNotification, NtfyPublisher } from "./ntfy.js";
+import { BarkPublisher, formatPushNotification } from "./bark.js";
 import { handlePubSubPush, type PubSubPushBody } from "./pubsub.js";
 import { renewExpiringSubscriptions } from "./renewal.js";
 import type { AccountStore } from "./store.js";
-import type { EventsClient, NtfyConfig } from "./types.js";
+import type { BarkConfig, EventsClient } from "./types.js";
 
 export type CreateAppOptions = {
   store: AccountStore;
-  ntfy: NtfyConfig;
+  bark: BarkConfig;
   adminToken: string;
   deepLinkScheme?: string;
   /** Required; tests pass an explicit secret (never hardcode in production). */
@@ -68,7 +68,7 @@ export function createApp(options: CreateAppOptions): Express {
   app.use(helmet());
   app.use(express.json({ limit: "1mb" }));
 
-  const publisher = new NtfyPublisher(options.ntfy);
+  const publisher = new BarkPublisher(options.bark);
   if (!options.tokenSecret) {
     throw new Error("tokenSecret is required");
   }
@@ -97,9 +97,10 @@ export function createApp(options: CreateAppOptions): Express {
   app.get("/health", (_req, res) => {
     res.status(200).json({
       status: "ok",
-      service: "google-chat-ntfy-relay",
+      service: "google-chat-bark-relay",
       time: new Date().toISOString(),
       accounts: options.store.listAccounts().length,
+      badgeCount: options.store.getBadgeCount(),
     });
   });
 
@@ -224,7 +225,7 @@ export function createApp(options: CreateAppOptions): Express {
     next();
   });
 
-  app.post("/admin/test-ntfy", async (req, res) => {
+  const publishTestPush = async (req: Request, res: Response) => {
     try {
       const {
         accountLabel = "Test",
@@ -233,22 +234,44 @@ export function createApp(options: CreateAppOptions): Express {
         messageText = "test notification",
       } = req.body ?? {};
 
-      const formatted = formatNtfyNotification({
+      const formatted = formatPushNotification({
         accountLabel,
         spaceTitle,
         senderName,
         messageText,
       });
 
+      const badge = options.store.incrementBadgeCount();
       await publisher.publish({
         title: formatted.title,
         body: formatted.body,
-        tags: ["white_check_mark"],
+        badge,
+        group: "google-chat",
       });
 
-      res.status(200).json({ ok: true });
+      res.status(200).json({ ok: true, badge });
     } catch (err) {
-      console.error("test-ntfy publish failed", err);
+      console.error("test push publish failed", err);
+      res.status(502).json({ error: "publish_failed" });
+    }
+  };
+
+  app.post("/admin/test-bark", publishTestPush);
+  /** @deprecated Prefer /admin/test-bark */
+  app.post("/admin/test-ntfy", publishTestPush);
+
+  app.post("/admin/badge/reset", async (_req, res) => {
+    try {
+      options.store.resetBadgeCount();
+      await publisher.publish({
+        title: "[Relay] badge cleared",
+        body: "Unread badge reset to 0",
+        badge: 0,
+        group: "google-chat",
+      });
+      res.status(200).json({ ok: true, badge: 0 });
+    } catch (err) {
+      console.error("badge reset failed", err);
       res.status(502).json({ error: "publish_failed" });
     }
   });
@@ -369,7 +392,8 @@ export function createApp(options: CreateAppOptions): Express {
             await publisher.publish({
               title: "[Relay] subscription renew failed",
               body: `account ${accountId}: ${error instanceof Error ? error.message : "error"}`,
-              tags: ["warning"],
+              group: "google-chat",
+              badge: options.store.getBadgeCount(),
             });
           } catch (publishError) {
             console.error("failed to alert renew failure", publishError);

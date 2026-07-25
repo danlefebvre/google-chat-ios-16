@@ -19,10 +19,16 @@ export type QuietHours = {
   timeZone: string;
 };
 
+/** @deprecated Push delivery moved to Bark — kept for transitional typing only. */
 export type NtfyConfig = {
   baseUrl: string;
   topic: string;
   accessToken?: string;
+};
+
+export type BarkConfig = {
+  baseUrl: string;
+  deviceKey: string;
 };
 
 export type ParsedChatEvent = {

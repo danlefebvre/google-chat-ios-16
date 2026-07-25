@@ -7,10 +7,9 @@ describe("GET /health", () => {
   it("returns ok with service metadata", async () => {
     const app = createApp({
       store: new InMemoryStore(),
-      ntfy: {
-        baseUrl: "https://ntfy.sh",
-        topic: "test-topic",
-        accessToken: "tk",
+      bark: {
+        baseUrl: "https://api.day.app",
+        deviceKey: "test-device-key",
       },
       adminToken: "admin-secret",
       tokenSecret: "test-token-secret-32",
@@ -21,7 +20,8 @@ describe("GET /health", () => {
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({
       status: "ok",
-      service: "google-chat-ntfy-relay",
+      service: "google-chat-bark-relay",
+      badgeCount: 0,
     });
     expect(typeof res.body.time).toBe("string");
   });

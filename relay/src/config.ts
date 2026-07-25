@@ -1,14 +1,14 @@
 import { z } from "zod";
-import type { NtfyConfig } from "./types.js";
+import type { BarkConfig } from "./types.js";
 
 const envSchema = z.object({
   PORT: z.coerce.number().default(8080),
   ADMIN_TOKEN: z.string().min(8),
   RELAY_TOKEN_SECRET: z.string().min(16),
-  NTFY_BASE_URL: z.string().url().default("https://ntfy.sh"),
-  NTFY_TOPIC: z.string().min(8),
-  /** Optional — omit for open/secret-topic ntfy.sh usage without auth. */
-  NTFY_ACCESS_TOKEN: z.string().optional(),
+  /** Official Bark API host, or your self-hosted bark-server. */
+  BARK_BASE_URL: z.string().url().default("https://api.day.app"),
+  /** Device key from the Bark iOS app (the path segment after api.day.app/). */
+  BARK_DEVICE_KEY: z.string().min(8),
   DEEP_LINK_SCHEME: z.string().default("googlechatmulti"),
   /** Optional shared secret for Pub/Sub push verification (`?token=`). */
   PUBSUB_VERIFY_TOKEN: z.string().min(8).optional(),
@@ -27,7 +27,7 @@ export type AppConfig = {
   port: number;
   adminToken: string;
   tokenSecret: string;
-  ntfy: NtfyConfig;
+  bark: BarkConfig;
   deepLinkScheme: string;
   accountStorePath: string;
   pubsubVerifyToken?: string;
@@ -71,10 +71,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     tokenSecret: parsed.RELAY_TOKEN_SECRET,
     accountStorePath: parsed.ACCOUNT_STORE_PATH,
     pubsubVerifyToken: parsed.PUBSUB_VERIFY_TOKEN,
-    ntfy: {
-      baseUrl: parsed.NTFY_BASE_URL,
-      topic: parsed.NTFY_TOPIC,
-      accessToken: parsed.NTFY_ACCESS_TOKEN || undefined,
+    bark: {
+      baseUrl: parsed.BARK_BASE_URL,
+      deviceKey: parsed.BARK_DEVICE_KEY,
     },
     deepLinkScheme: parsed.DEEP_LINK_SCHEME,
     google: googleReady

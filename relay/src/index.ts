@@ -15,7 +15,7 @@ async function main(): Promise<void> {
 
   const app = createApp({
     store,
-    ntfy: config.ntfy,
+    bark: config.bark,
     adminToken: config.adminToken,
     deepLinkScheme: config.deepLinkScheme,
     tokenSecret: config.tokenSecret,
@@ -32,7 +32,7 @@ async function main(): Promise<void> {
 
   server.listen(config.port, () => {
     console.log(
-      `google-chat-ntfy-relay listening on :${config.port} → ${config.ntfy.baseUrl}/<topic>`,
+      `google-chat-bark-relay listening on :${config.port} → ${config.bark.baseUrl}/<deviceKey>`,
     );
   });
 }

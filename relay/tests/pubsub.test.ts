@@ -37,10 +37,9 @@ describe("POST /pubsub/push", () => {
 
     const app = createApp({
       store,
-      ntfy: {
-        baseUrl: "https://ntfy.sh",
-        topic: "secret-topic",
-        accessToken: "tk",
+      bark: {
+        baseUrl: "https://api.day.app",
+        deviceKey: "test-device-key",
       },
       adminToken: "admin-secret",
       tokenSecret: "test-token-secret-32",
@@ -75,9 +74,15 @@ describe("POST /pubsub/push", () => {
 
     expect(res.status).toBe(204);
     expect(fetchMock).toHaveBeenCalledOnce();
-    const [, init] = fetchMock.mock.calls[0]!;
-    expect(init.headers.Title).toBe("[Work] #eng-standup");
-    expect(init.body).toBe("Alice: deploy looks good");
+    const [url, init] = fetchMock.mock.calls[0]!;
+    expect(url).toBe("https://api.day.app/test-device-key");
+    const payload = JSON.parse(init.body as string);
+    expect(payload.title).toBe("[Work] #eng-standup");
+    expect(payload.body).toBe("Alice: deploy looks good");
+    expect(payload.badge).toBe(1);
+    expect(payload.sound).toBe("birdsong");
+    expect(payload.url).toContain("googlechatmulti://space/");
+    expect(payload.url).toContain("spaces%2FAAA");
   });
 
   it("acks muted events without publishing", async () => {
@@ -101,10 +106,9 @@ describe("POST /pubsub/push", () => {
 
     const app = createApp({
       store,
-      ntfy: {
-        baseUrl: "https://ntfy.sh",
-        topic: "secret-topic",
-        accessToken: "tk",
+      bark: {
+        baseUrl: "https://api.day.app",
+        deviceKey: "test-device-key",
       },
       adminToken: "admin-secret",
       tokenSecret: "test-token-secret-32",
@@ -139,10 +143,9 @@ describe("POST /pubsub/push", () => {
 
     const app = createApp({
       store: new InMemoryStore(),
-      ntfy: {
-        baseUrl: "https://ntfy.sh",
-        topic: "secret-topic",
-        accessToken: "tk",
+      bark: {
+        baseUrl: "https://api.day.app",
+        deviceKey: "test-device-key",
       },
       adminToken: "admin-secret",
       tokenSecret: "test-token-secret-32",
@@ -185,10 +188,9 @@ describe("POST /pubsub/push", () => {
 
     const app = createApp({
       store,
-      ntfy: {
-        baseUrl: "https://ntfy.sh",
-        topic: "secret-topic",
-        accessToken: "tk",
+      bark: {
+        baseUrl: "https://api.day.app",
+        deviceKey: "test-device-key",
       },
       adminToken: "admin-secret",
       tokenSecret: "test-token-secret-32",

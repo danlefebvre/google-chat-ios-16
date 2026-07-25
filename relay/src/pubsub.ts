@@ -1,5 +1,8 @@
+import {
+  formatPushNotification,
+  type BarkPublisher,
+} from "./bark.js";
 import { parseChatEvent, shouldNotify } from "./events.js";
-import { formatNtfyNotification, type NtfyPublisher } from "./ntfy.js";
 import type { AccountStore } from "./store.js";
 import { normalizeSubscriptionName } from "./store.js";
 
@@ -15,7 +18,7 @@ export type PubSubPushBody = {
 export async function handlePubSubPush(deps: {
   body: PubSubPushBody;
   store: AccountStore;
-  publisher: NtfyPublisher;
+  publisher: BarkPublisher;
   deepLinkScheme?: string;
   now?: Date;
 }): Promise<{ status: number; skipped?: string }> {
@@ -84,7 +87,7 @@ export async function handlePubSubPush(deps: {
     return { status: 204, skipped: decision.reason };
   }
 
-  const formatted = formatNtfyNotification({
+  const formatted = formatPushNotification({
     accountLabel: parsed.accountLabel,
     spaceTitle: parsed.spaceTitle,
     senderName: parsed.senderName,
@@ -95,11 +98,14 @@ export async function handlePubSubPush(deps: {
     ? `${deps.deepLinkScheme}://space/${encodeURIComponent(parsed.spaceName)}?accountId=${encodeURIComponent(parsed.accountId)}`
     : undefined;
 
+  const badge = deps.store.incrementBadgeCount();
+
   await deps.publisher.publish({
     title: formatted.title,
     body: formatted.body,
-    tags: ["speech_balloon"],
-    clickUrl,
+    url: clickUrl,
+    badge,
+    group: "google-chat",
   });
 
   return { status: 204 };

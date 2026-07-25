@@ -32,7 +32,7 @@ describe("POST /admin/renew-subscriptions", () => {
 
     const app = createApp({
       store,
-      ntfy: { baseUrl: "https://ntfy.sh", topic: "t", accessToken: "tk" },
+      bark: { baseUrl: "https://api.day.app", deviceKey: "test-device-key" },
       adminToken: "admin-secret",
       tokenSecret: "unit-test-secret-value",
       eventsClient: events,

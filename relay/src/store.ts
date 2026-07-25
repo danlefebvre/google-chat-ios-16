@@ -17,6 +17,11 @@ export interface AccountStore {
   deleteAccount(accountId: string): void;
   getQuietHours(): QuietHours | null;
   setQuietHours(quiet: QuietHours | null): void;
+  /** Bark home-screen badge counter (absolute value sent on each push). */
+  getBadgeCount(): number;
+  /** Increment and return the new badge count. */
+  incrementBadgeCount(): number;
+  resetBadgeCount(): void;
 }
 
 /** Normalize `//workspaceevents.googleapis.com/subscriptions/X` → `subscriptions/X`. */
@@ -36,11 +41,13 @@ export function normalizeSubscriptionName(raw: string): string {
 type PersistedState = {
   accounts: AccountRecord[];
   quietHours: QuietHours | null;
+  badgeCount?: number;
 };
 
 export class InMemoryStore implements AccountStore {
   private accounts = new Map<string, AccountRecord>();
   private quietHours: QuietHours | null = null;
+  private badgeCount = 0;
 
   upsertAccount(account: AccountRecord): void {
     this.accounts.set(account.accountId, { ...account });
@@ -79,12 +86,26 @@ export class InMemoryStore implements AccountStore {
   setQuietHours(quiet: QuietHours | null): void {
     this.quietHours = quiet ? { ...quiet } : null;
   }
+
+  getBadgeCount(): number {
+    return this.badgeCount;
+  }
+
+  incrementBadgeCount(): number {
+    this.badgeCount += 1;
+    return this.badgeCount;
+  }
+
+  resetBadgeCount(): void {
+    this.badgeCount = 0;
+  }
 }
 
 /** JSON file-backed store so linked accounts survive process restarts. */
 export class FileAccountStore implements AccountStore {
   private accounts = new Map<string, AccountRecord>();
   private quietHours: QuietHours | null = null;
+  private badgeCount = 0;
 
   constructor(private readonly filePath: string) {
     this.load();
@@ -131,6 +152,21 @@ export class FileAccountStore implements AccountStore {
     this.persist();
   }
 
+  getBadgeCount(): number {
+    return this.badgeCount;
+  }
+
+  incrementBadgeCount(): number {
+    this.badgeCount += 1;
+    this.persist();
+    return this.badgeCount;
+  }
+
+  resetBadgeCount(): void {
+    this.badgeCount = 0;
+    this.persist();
+  }
+
   private load(): void {
     if (!existsSync(this.filePath)) {
       return;
@@ -142,6 +178,10 @@ export class FileAccountStore implements AccountStore {
         this.accounts.set(account.accountId, account);
       }
       this.quietHours = parsed.quietHours ?? null;
+      this.badgeCount =
+        typeof parsed.badgeCount === "number" && parsed.badgeCount > 0
+          ? Math.floor(parsed.badgeCount)
+          : 0;
     } catch (err) {
       console.error("failed to load account store", this.filePath, err);
     }
@@ -151,6 +191,7 @@ export class FileAccountStore implements AccountStore {
     const state: PersistedState = {
       accounts: this.listAccounts(),
       quietHours: this.getQuietHours(),
+      badgeCount: this.badgeCount,
     };
     const directory = dirname(this.filePath);
     mkdirSync(directory, { recursive: true });

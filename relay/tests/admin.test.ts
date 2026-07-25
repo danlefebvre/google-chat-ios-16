@@ -11,7 +11,7 @@ describe("admin API", () => {
   it("rejects missing admin token", async () => {
     const app = createApp({
       store: new InMemoryStore(),
-      ntfy: { baseUrl: "https://ntfy.sh", topic: "t", accessToken: "tk" },
+      bark: { baseUrl: "https://api.day.app", deviceKey: "test-device-key" },
       adminToken: "admin-secret",
       tokenSecret: "test-token-secret-32",
       eventsClient: {
@@ -36,13 +36,13 @@ describe("admin API", () => {
 
     const app = createApp({
       store: new InMemoryStore(),
-      ntfy: { baseUrl: "https://ntfy.sh", topic: "t", accessToken: "tk" },
+      bark: { baseUrl: "https://api.day.app", deviceKey: "test-device-key" },
       adminToken: "admin-secret",
       tokenSecret: "test-token-secret-32",
     });
 
     const res = await request(app)
-      .post("/admin/test-ntfy")
+      .post("/admin/test-bark")
       .set("Authorization", "Bearer admin-secret")
       .send({
         accountLabel: "Work",
@@ -52,14 +52,19 @@ describe("admin API", () => {
       });
 
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ ok: true });
+    expect(res.body).toEqual({ ok: true, badge: 1 });
     expect(fetchMock).toHaveBeenCalledOnce();
-    const [, init] = fetchMock.mock.calls[0]!;
-    expect(init.headers.Title).toBe("[Work] #eng-standup");
-    expect(init.body).toBe("Alice: deploy looks good");
+    const [url, init] = fetchMock.mock.calls[0]!;
+    expect(url).toBe("https://api.day.app/test-device-key");
+    expect(init.headers["Content-Type"]).toContain("application/json");
+    const payload = JSON.parse(init.body as string);
+    expect(payload.title).toBe("[Work] #eng-standup");
+    expect(payload.body).toBe("Alice: deploy looks good");
+    expect(payload.badge).toBe(1);
+    expect(payload.sound).toBe("birdsong");
   });
 
-  it("returns 502 when test-ntfy publish fails", async () => {
+  it("returns 502 when test-bark publish fails", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: false,
       status: 503,
@@ -69,17 +74,16 @@ describe("admin API", () => {
 
     const app = createApp({
       store: new InMemoryStore(),
-      ntfy: {
-        baseUrl: "https://ntfy.sh",
-        topic: "t",
-        accessToken: "tk",
+      bark: {
+        baseUrl: "https://api.day.app",
+        deviceKey: "test-device-key",
       },
       adminToken: "admin-secret",
       tokenSecret: "test-token-secret-32",
     });
 
     const res = await request(app)
-      .post("/admin/test-ntfy")
+      .post("/admin/test-bark")
       .set("Authorization", "Bearer admin-secret")
       .send({});
 
@@ -99,7 +103,7 @@ describe("admin API", () => {
     };
     const app = createApp({
       store: new InMemoryStore(),
-      ntfy: { baseUrl: "https://ntfy.sh", topic: "t", accessToken: "tk" },
+      bark: { baseUrl: "https://api.day.app", deviceKey: "test-device-key" },
       adminToken: "admin-secret",
       eventsClient: events,
       tokenSecret: "test-token-secret-32chars!!",
@@ -161,7 +165,7 @@ describe("admin API", () => {
     };
     const app = createApp({
       store: new InMemoryStore(),
-      ntfy: { baseUrl: "https://ntfy.sh", topic: "t", accessToken: "tk" },
+      bark: { baseUrl: "https://api.day.app", deviceKey: "test-device-key" },
       adminToken: "admin-secret",
       eventsClient: events,
       tokenSecret: "test-token-secret-32chars!!",
