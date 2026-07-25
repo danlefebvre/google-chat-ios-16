@@ -75,6 +75,8 @@ struct ThreadView: View {
                 }
             }
         }
+        .toolbarBackground(Color.white, for: .navigationBar)
+        .toolbarBackground(.visible, for: .navigationBar)
         .task { await load() }
         .onChange(of: pickerItem) { item in
             guard let item else { return }
