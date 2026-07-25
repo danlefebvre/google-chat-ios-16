@@ -42,12 +42,6 @@ struct AccountManagerView: View {
                         } label: {
                             Label("Remove", systemImage: "trash")
                         }
-                        Button {
-                            Task { await model.removeAccount(account.id, localOnly: true) }
-                        } label: {
-                            Label("Local only", systemImage: "iphone.slash")
-                        }
-                        .tint(.gray)
                     }
                 }
             }
