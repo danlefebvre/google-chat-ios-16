@@ -31,6 +31,8 @@ struct ThreadView: View {
                             MessageBubble(
                                 message: message,
                                 senderLabel: senderLabel(for: message),
+                                accountId: conversation?.accountId,
+                                tokenProvider: model.authStore.asTokenProvider(),
                                 onReact: { unicode in
                                     await react(to: message, unicode: unicode)
                                 }
@@ -199,18 +201,59 @@ enum ChatQuickReactions {
 struct MessageBubble: View {
     let message: ChatMessage
     let senderLabel: String
+    let accountId: AccountID?
+    let tokenProvider: (any TokenProviding)?
     let onReact: (String) async -> Void
+
+    private var textBody: String? {
+        let trimmed = message.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    private var attachments: [ChatAttachment] {
+        message.attachment ?? []
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(senderLabel)
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(Color("SecondaryText"))
-            Text(message.text ?? "(attachment)")
-                .font(.body)
-                .padding(10)
-                .background(Color("BubbleFill"))
-                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+
+            VStack(alignment: .leading, spacing: 8) {
+                if let textBody {
+                    Text(textBody)
+                        .font(.body)
+                } else if attachments.isEmpty {
+                    Text("(empty message)")
+                        .font(.body)
+                        .foregroundStyle(.secondary)
+                }
+
+                ForEach(Array(attachments.enumerated()), id: \.offset) { _, attachment in
+                    if attachment.isImage,
+                       let accountId,
+                       let tokenProvider,
+                       attachment.mediaResourceName != nil
+                    {
+                        AttachmentImageView(
+                            attachment: attachment,
+                            accountId: accountId,
+                            tokenProvider: tokenProvider
+                        )
+                    } else {
+                        Label(
+                            attachment.contentName ?? "Attachment",
+                            systemImage: attachment.isImage ? "photo" : "paperclip"
+                        )
+                        .font(.caption)
+                        .foregroundStyle(Color("SecondaryText"))
+                    }
+                }
+            }
+            .padding(10)
+            .background(Color("BubbleFill"))
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
 
             if let reactions = message.emojiReactionSummaries, !reactions.isEmpty {
                 HStack(spacing: 6) {

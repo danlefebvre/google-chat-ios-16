@@ -19,7 +19,14 @@ public struct MediaClient: Sendable {
         maxBytes: Int? = nil
     ) async throws -> Data {
         let limit = maxBytes ?? self.maxBytes
-        var components = URLComponents(string: "https://chat.googleapis.com/v1/media/\(resourceName)")!
+        // resourceName may contain slashes (e.g. spaces/.../files/...); keep them as path segments.
+        let trimmed = resourceName.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        guard
+            let encoded = trimmed.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed),
+            var components = URLComponents(string: "https://chat.googleapis.com/v1/media/\(encoded)")
+        else {
+            throw ChatAPIError.invalidURL
+        }
         components.queryItems = [URLQueryItem(name: "alt", value: "media")]
         guard let url = components.url else { throw ChatAPIError.invalidURL }
 

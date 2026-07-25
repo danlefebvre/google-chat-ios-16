@@ -171,6 +171,7 @@ public struct ChatAttachment: Codable, Hashable, Sendable {
     public var downloadUri: String?
     public var thumbnailUri: String?
     public var source: String?
+    public var attachmentDataRef: AttachmentDataRef?
 
     public init(
         name: String? = nil,
@@ -178,7 +179,8 @@ public struct ChatAttachment: Codable, Hashable, Sendable {
         contentType: String? = nil,
         downloadUri: String? = nil,
         thumbnailUri: String? = nil,
-        source: String? = nil
+        source: String? = nil,
+        attachmentDataRef: AttachmentDataRef? = nil
     ) {
         self.name = name
         self.contentName = contentName
@@ -186,6 +188,20 @@ public struct ChatAttachment: Codable, Hashable, Sendable {
         self.downloadUri = downloadUri
         self.thumbnailUri = thumbnailUri
         self.source = source
+        self.attachmentDataRef = attachmentDataRef
+    }
+
+    public var isImage: Bool {
+        let type = (contentType ?? "").lowercased()
+        if type.hasPrefix("image/") { return true }
+        let file = (contentName ?? "").lowercased()
+        return [".png", ".jpg", ".jpeg", ".gif", ".webp", ".heic"].contains { file.hasSuffix($0) }
+    }
+
+    /// Resource name for `media.download` (uploaded Chat files, not Drive).
+    public var mediaResourceName: String? {
+        let raw = attachmentDataRef?.resourceName?.trimmingCharacters(in: .whitespacesAndNewlines)
+        return (raw?.isEmpty == false) ? raw : nil
     }
 }
 
