@@ -1,5 +1,6 @@
 import request from "supertest";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { MAX_ACCOUNT_LABEL_LENGTH } from "../src/accounts.js";
 import { createApp } from "../src/app.js";
 import { InMemoryStore } from "../src/store.js";
 
@@ -186,5 +187,71 @@ describe("admin API", () => {
       .query({ accountId })
       .set("Authorization", `Bearer ${relayCredential}`);
     expect(removed.status).toBe(204);
+  });
+
+  it("updates account label via PATCH with relay credential", async () => {
+    const store = new InMemoryStore();
+    const events = {
+      createSubscription: vi.fn().mockResolvedValue({
+        name: "subscriptions/u1",
+        expireTime: "2026-08-01T00:00:00Z",
+      }),
+      renewSubscription: vi.fn(),
+      deleteSubscription: vi.fn().mockResolvedValue(undefined),
+      revokeToken: vi.fn().mockResolvedValue(undefined),
+    };
+    const app = createApp({
+      store,
+      bark: { baseUrl: "https://api.day.app", deviceKey: "test-device-key" },
+      adminToken: "admin-secret",
+      eventsClient: events,
+      tokenSecret: "test-token-secret-32chars!!",
+      verifyAccountOwnership: async () => true,
+    });
+
+    const accountId = "https://accounts.google.com|label-edit";
+    const register = await request(app).post("/accounts").send({
+      accountId,
+      email: "a@b.com",
+      label: "Work",
+      refreshToken: "rt-user",
+    });
+    expect(register.status).toBe(201);
+    const relayCredential = register.body.relayCredential as string;
+
+    const denied = await request(app)
+      .patch("/accounts")
+      .query({ accountId })
+      .set("Authorization", "Bearer wrong")
+      .send({ label: "Consulting" });
+    expect(denied.status).toBe(403);
+
+    const missing = await request(app)
+      .patch("/accounts")
+      .query({ accountId })
+      .set("Authorization", `Bearer ${relayCredential}`)
+      .send({});
+    expect(missing.status).toBe(400);
+
+    const updated = await request(app)
+      .patch("/accounts")
+      .query({ accountId })
+      .set("Authorization", `Bearer ${relayCredential}`)
+      .send({ label: "  Consulting  " });
+    expect(updated.status).toBe(200);
+    expect(updated.body).toEqual({ ok: true, label: "Consulting" });
+    expect(store.getAccount(accountId)?.label).toBe("Consulting");
+    // Label edit must not recreate the Workspace Events subscription.
+    expect(events.createSubscription).toHaveBeenCalledTimes(1);
+    expect(events.deleteSubscription).not.toHaveBeenCalled();
+
+    const tooLong = await request(app)
+      .patch("/accounts")
+      .query({ accountId })
+      .set("Authorization", `Bearer ${relayCredential}`)
+      .send({ label: "x".repeat(MAX_ACCOUNT_LABEL_LENGTH + 1) });
+    expect(tooLong.status).toBe(400);
+    expect(tooLong.body).toEqual({ error: "label_too_long" });
+    expect(store.getAccount(accountId)?.label).toBe("Consulting");
   });
 });

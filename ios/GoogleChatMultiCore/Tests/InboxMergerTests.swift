@@ -94,6 +94,38 @@ final class InboxMergerTests: XCTestCase {
         XCTAssertEqual(filtered.map(\.title), ["A"])
     }
 
+    func testFilterByAccountIdSurvivesDuplicateLabels() {
+        let workA = AccountID(issuer: "https://accounts.google.com", subject: "work-a")
+        let workB = AccountID(issuer: "https://accounts.google.com", subject: "work-b")
+        let rows = [
+            ConversationSummary(
+                accountId: workA,
+                accountLabel: "Work",
+                accountColorHex: "#C45C26",
+                spaceName: "spaces/A",
+                title: "A",
+                lastMessagePreview: "x",
+                lastActivityAt: Date(timeIntervalSince1970: 2),
+                unreadCount: 0,
+                isDirectMessage: false
+            ),
+            ConversationSummary(
+                accountId: workB,
+                accountLabel: "Work",
+                accountColorHex: "#1F4E79",
+                spaceName: "spaces/B",
+                title: "B",
+                lastMessagePreview: "y",
+                lastActivityAt: Date(timeIntervalSince1970: 1),
+                unreadCount: 0,
+                isDirectMessage: false
+            ),
+        ]
+
+        let filtered = InboxMerger.filter(rows, by: .accountId(workB))
+        XCTAssertEqual(filtered.map(\.title), ["B"])
+    }
+
     func testSearchMatchesTitleAndPreview() {
         let account = AccountID(issuer: "https://accounts.google.com", subject: "work")
         let rows = [
