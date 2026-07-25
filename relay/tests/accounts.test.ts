@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
-import { AccountService } from "../src/accounts.js";
+import {
+  AccountService,
+  MAX_ACCOUNT_LABEL_LENGTH,
+} from "../src/accounts.js";
 import { InMemoryStore } from "../src/store.js";
 
 function cryptoStub() {
@@ -159,7 +162,7 @@ describe("AccountService", () => {
     expect(events.deleteSubscription).not.toHaveBeenCalled();
   });
 
-  it("rejects empty labels", () => {
+  it("rejects empty and overlong labels", () => {
     const store = new InMemoryStore();
     store.upsertAccount({
       accountId: "iss|sub",
@@ -185,6 +188,13 @@ describe("AccountService", () => {
       crypto: cryptoStub(),
     });
     expect(() => service.updateLabel("iss|sub", "   ")).toThrow(/empty_label/);
+    expect(() =>
+      service.updateLabel("iss|sub", "x".repeat(MAX_ACCOUNT_LABEL_LENGTH + 1)),
+    ).toThrow(/label_too_long/);
+    expect(
+      service.updateLabel("iss|sub", "x".repeat(MAX_ACCOUNT_LABEL_LENGTH)).label
+        .length,
+    ).toBe(MAX_ACCOUNT_LABEL_LENGTH);
   });
 
   it("retries teardown after partial failure without re-deleting subscription", async () => {

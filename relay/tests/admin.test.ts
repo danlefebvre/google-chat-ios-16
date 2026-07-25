@@ -1,5 +1,6 @@
 import request from "supertest";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { MAX_ACCOUNT_LABEL_LENGTH } from "../src/accounts.js";
 import { createApp } from "../src/app.js";
 import { InMemoryStore } from "../src/store.js";
 
@@ -243,5 +244,14 @@ describe("admin API", () => {
     // Label edit must not recreate the Workspace Events subscription.
     expect(events.createSubscription).toHaveBeenCalledTimes(1);
     expect(events.deleteSubscription).not.toHaveBeenCalled();
+
+    const tooLong = await request(app)
+      .patch("/accounts")
+      .query({ accountId })
+      .set("Authorization", `Bearer ${relayCredential}`)
+      .send({ label: "x".repeat(MAX_ACCOUNT_LABEL_LENGTH + 1) });
+    expect(tooLong.status).toBe(400);
+    expect(tooLong.body).toEqual({ error: "label_too_long" });
+    expect(store.getAccount(accountId)?.label).toBe("Consulting");
   });
 });

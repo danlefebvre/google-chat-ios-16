@@ -18,6 +18,11 @@ enum AccountColorPalette {
     }
 }
 
+/// Keep in sync with `MAX_ACCOUNT_LABEL_LENGTH` in `relay/src/accounts.ts`.
+enum AccountLabelLimits {
+    static let maxLength = 32
+}
+
 struct AccountManagerView: View {
     @EnvironmentObject private var model: AppModel
     @StateObject private var signIn = GoogleSignInCoordinator()
@@ -204,17 +209,32 @@ struct EditAccountSheet: View {
 
     private var canSave: Bool {
         !trimmedLabel.isEmpty
+            && trimmedLabel.count <= AccountLabelLimits.maxLength
             && (trimmedLabel != account.label || colorHex != account.colorHex)
     }
 
     var body: some View {
         NavigationStack {
             Form {
-                Section("Label") {
+                Section {
                     TextField("Account label", text: $label)
                         .textInputAutocapitalization(.words)
                         .disableAutocorrection(true)
                         .accessibilityLabel("Account label")
+                        .onChange(of: label) { newValue in
+                            if newValue.count > AccountLabelLimits.maxLength {
+                                label = String(newValue.prefix(AccountLabelLimits.maxLength))
+                            }
+                        }
+                } header: {
+                    Text("Label")
+                } footer: {
+                    Text("\(trimmedLabel.count)/\(AccountLabelLimits.maxLength)")
+                        .foregroundStyle(
+                            trimmedLabel.count >= AccountLabelLimits.maxLength
+                                ? Color.orange
+                                : Color("SecondaryText")
+                        )
                 }
 
                 Section("Badge color") {

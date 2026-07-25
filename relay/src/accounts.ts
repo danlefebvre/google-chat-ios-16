@@ -2,6 +2,9 @@ import { randomBytes } from "node:crypto";
 import type { AccountStore } from "./store.js";
 import type { AccountRecord, EventsClient, TokenCrypto } from "./types.js";
 
+/** Max length for account display labels (push titles + inbox badges). */
+export const MAX_ACCOUNT_LABEL_LENGTH = 32;
+
 export type RegisterAccountInput = {
   accountId: string;
   email: string;
@@ -170,6 +173,9 @@ export class AccountService {
     const trimmed = label.trim();
     if (!trimmed) {
       throw new Error("empty_label");
+    }
+    if (trimmed.length > MAX_ACCOUNT_LABEL_LENGTH) {
+      throw new Error("label_too_long");
     }
     const updated = { ...existing, label: trimmed };
     this.store.upsertAccount(updated);

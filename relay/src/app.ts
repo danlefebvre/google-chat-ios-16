@@ -249,6 +249,10 @@ export function createApp(options: CreateAppOptions): Express {
         res.status(400).json({ error: "empty_label" });
         return;
       }
+      if (message === "label_too_long") {
+        res.status(400).json({ error: "label_too_long" });
+        return;
+      }
       if (message.startsWith("unknown account:")) {
         res.status(404).json({ error: "unknown_account" });
         return;
