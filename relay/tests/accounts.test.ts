@@ -126,6 +126,67 @@ describe("AccountService", () => {
     expect(store.getAccount("iss|sub")).toBeUndefined();
   });
 
+  it("updates the display label without touching subscriptions", async () => {
+    const store = new InMemoryStore();
+    store.upsertAccount({
+      accountId: "iss|sub",
+      email: "a@b.com",
+      label: "Work",
+      encryptedRefreshToken: "enc:rt",
+      encryptedRelayCredential: "enc:relay",
+      subscriptionName: "subscriptions/sub-1",
+      subscriptionExpireTime: "2026-08-01T00:00:00Z",
+      ntfyBindingActive: true,
+      muted: false,
+      mutedSpaces: [],
+      createdAt: "2026-01-01T00:00:00Z",
+    });
+    const events = {
+      createSubscription: vi.fn(),
+      renewSubscription: vi.fn(),
+      deleteSubscription: vi.fn(),
+      revokeToken: vi.fn(),
+    };
+    const service = new AccountService({ store, events, crypto: cryptoStub() });
+
+    const updated = service.updateLabel("iss|sub", "  Consulting  ");
+    expect(updated.label).toBe("Consulting");
+    expect(store.getAccount("iss|sub")?.label).toBe("Consulting");
+    expect(store.getAccount("iss|sub")?.subscriptionName).toBe(
+      "subscriptions/sub-1",
+    );
+    expect(events.createSubscription).not.toHaveBeenCalled();
+    expect(events.deleteSubscription).not.toHaveBeenCalled();
+  });
+
+  it("rejects empty labels", () => {
+    const store = new InMemoryStore();
+    store.upsertAccount({
+      accountId: "iss|sub",
+      email: "a@b.com",
+      label: "Work",
+      encryptedRefreshToken: "enc:rt",
+      encryptedRelayCredential: "enc:relay",
+      subscriptionName: null,
+      subscriptionExpireTime: null,
+      ntfyBindingActive: true,
+      muted: false,
+      mutedSpaces: [],
+      createdAt: "2026-01-01T00:00:00Z",
+    });
+    const service = new AccountService({
+      store,
+      events: {
+        createSubscription: vi.fn(),
+        renewSubscription: vi.fn(),
+        deleteSubscription: vi.fn(),
+        revokeToken: vi.fn(),
+      },
+      crypto: cryptoStub(),
+    });
+    expect(() => service.updateLabel("iss|sub", "   ")).toThrow(/empty_label/);
+  });
+
   it("retries teardown after partial failure without re-deleting subscription", async () => {
     const store = new InMemoryStore();
     const events = {

@@ -216,6 +216,48 @@ export function createApp(options: CreateAppOptions): Express {
     await handleAccountDelete(req, res, req.params.accountId);
   });
 
+  // Update display label for push titles. Auth is the opaque relay credential
+  // (same as teardown). Prefer ?accountId=… — path params break on issuer URLs.
+  app.patch("/accounts", (req, res) => {
+    try {
+      const accountId =
+        typeof req.query.accountId === "string" ? req.query.accountId : "";
+      if (!accountId) {
+        res.status(400).json({ error: "missing_account_id" });
+        return;
+      }
+      const label =
+        typeof req.body?.label === "string" ? req.body.label : undefined;
+      if (label === undefined) {
+        res.status(400).json({ error: "missing_fields" });
+        return;
+      }
+      const relayCredential = bearerToken(req);
+      if (!relayCredential) {
+        res.status(401).json({ error: "unauthorized" });
+        return;
+      }
+      if (!accounts.ownsRelayCredential(accountId, relayCredential)) {
+        res.status(403).json({ error: "forbidden" });
+        return;
+      }
+      const updated = accounts.updateLabel(accountId, label);
+      res.status(200).json({ ok: true, label: updated.label });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      if (message === "empty_label") {
+        res.status(400).json({ error: "empty_label" });
+        return;
+      }
+      if (message.startsWith("unknown account:")) {
+        res.status(404).json({ error: "unknown_account" });
+        return;
+      }
+      console.error("update account label failed", err);
+      res.status(500).json({ error: "update_failed" });
+    }
+  });
+
   // App ack: opening GoogleChatMulti clears the durable Bark badge counter so
   // the next Chat push starts again at 1. Auth is any linked relay credential
   // (never ADMIN_TOKEN). Does not push a Bark notification — iOS already

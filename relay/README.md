@@ -28,6 +28,7 @@ Manual smoke: `POST /admin/test-bark` (Bearer admin token)
 | GET | `/health` | Liveness (+ current badge count) |
 | POST | `/pubsub/push` | Pub/Sub push endpoint |
 | POST | `/accounts` | App: register account (body includes refresh token; response includes `relayCredential`) |
+| PATCH | `/accounts?accountId=` | App: update display label (`Authorization: Bearer <relayCredential>`) |
 | DELETE | `/accounts/:accountId` | App: teardown (`Authorization: Bearer <relayCredential>`) |
 | POST | `/badge/reset` | App: reset durable badge counter (`Bearer <relayCredential>`) |
 | POST | `/admin/test-bark` | Manual preview publish with badge (admin token) |

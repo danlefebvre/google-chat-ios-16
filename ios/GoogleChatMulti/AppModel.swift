@@ -159,6 +159,81 @@ final class AppModel: ObservableObject {
         accounts = authStore.loadAccounts()
     }
 
+    /// Persists a new label/color locally, updates inbox badges immediately, and
+    /// syncs the label to the relay so push titles stay in sync. Color is local-only.
+    func updateAccountDisplay(
+        _ accountId: AccountID,
+        label: String,
+        colorHex: String
+    ) async {
+        let trimmedLabel = label.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedLabel.isEmpty else { return }
+        guard var account = accounts.first(where: { $0.id == accountId }) else { return }
+        let previousLabel = account.label
+        let labelChanged = previousLabel != trimmedLabel
+        let colorChanged = account.colorHex != colorHex
+        guard labelChanged || colorChanged else { return }
+
+        account.label = trimmedLabel
+        account.colorHex = colorHex
+        guard
+            let refresh = authStore.refreshToken(for: accountId),
+            let access = authStore.accessToken(for: accountId)
+        else {
+            banner = "Could not save account changes — missing credentials."
+            return
+        }
+        authStore.save(account: account, refreshToken: refresh, accessToken: access)
+        accounts = authStore.loadAccounts()
+
+        if case let .accountLabel(selected) = filter,
+           selected.caseInsensitiveCompare(previousLabel) == .orderedSame
+        {
+            filter = .accountLabel(trimmedLabel)
+        }
+
+        let updatedRows = conversations.map { row -> ConversationSummary in
+            guard row.accountId == accountId else { return row }
+            var copy = row
+            copy.accountLabel = trimmedLabel
+            copy.accountColorHex = colorHex
+            return copy
+        }
+        applyConversations(updatedRows)
+        do {
+            try await cache.replaceConversations(updatedRows)
+        } catch {
+            AppLog.inbox.error(
+                "cache update after account edit failed: \(error.localizedDescription, privacy: .public)"
+            )
+        }
+
+        if labelChanged {
+            await syncLabelToRelay(accountId: accountId, label: trimmedLabel)
+        }
+    }
+
+    private func syncLabelToRelay(accountId: AccountID, label: String) async {
+        guard let client = RelayAdminClient.shared else { return }
+        guard let credential = authStore.relayCredential(for: accountId), !credential.isEmpty else {
+            // Local-only or pending registration — next successful register sends the new label.
+            return
+        }
+        do {
+            try await client.updateAccountLabel(
+                accountId,
+                label: label,
+                relayCredential: credential
+            )
+        } catch {
+            AppLog.relay.error(
+                "label sync failed: \(error.localizedDescription, privacy: .public)"
+            )
+            banner =
+                "Saved on this device; push label sync failed — notifications may still use the old name."
+        }
+    }
+
     /// Removes the account from the relay first, then local credentials/cache.
     /// Pass `localOnly: true` only for an explicitly labeled local wipe.
     /// If relay teardown fails, still wipes the device and surfaces a warning.

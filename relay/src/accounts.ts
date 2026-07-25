@@ -161,6 +161,21 @@ export class AccountService {
     this.store.upsertAccount({ ...existing, muted });
   }
 
+  /** Updates the display label used in push titles without re-registering. */
+  updateLabel(accountId: string, label: string): AccountRecord {
+    const existing = this.store.getAccount(accountId);
+    if (!existing) {
+      throw new Error(`unknown account: ${accountId}`);
+    }
+    const trimmed = label.trim();
+    if (!trimmed) {
+      throw new Error("empty_label");
+    }
+    const updated = { ...existing, label: trimmed };
+    this.store.upsertAccount(updated);
+    return updated;
+  }
+
   setSpaceMuted(
     accountId: string,
     spaceName: string,

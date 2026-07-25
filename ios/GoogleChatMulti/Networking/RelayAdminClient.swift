@@ -97,6 +97,38 @@ actor RelayAdminClient {
         AppLog.relay.info("badge reset ok")
     }
 
+    /// Updates the relay-side display label used in push notification titles.
+    func updateAccountLabel(
+        _ accountId: AccountID,
+        label: String,
+        relayCredential: String
+    ) async throws {
+        guard var components = URLComponents(url: try endpoint("accounts"), resolvingAgainstBaseURL: false)
+        else {
+            throw RelayClientError.requestFailed(status: -1, body: "invalid relay accounts URL")
+        }
+        components.queryItems = [URLQueryItem(name: "accountId", value: accountId.rawValue)]
+        guard let url = components.url else {
+            throw RelayClientError.requestFailed(status: -1, body: "invalid relay label URL")
+        }
+        AppLog.relay.info(
+            "PATCH \(url.absoluteString, privacy: .public) label=\(label, privacy: .public)"
+        )
+        var request = URLRequest(url: url)
+        request.httpMethod = "PATCH"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Bearer \(relayCredential)", forHTTPHeaderField: "Authorization")
+        request.httpBody = try JSONSerialization.data(withJSONObject: ["label": label])
+        let (data, response) = try await session.data(for: request)
+        let status = (response as? HTTPURLResponse)?.statusCode ?? -1
+        guard (200..<300).contains(status) else {
+            let body = String(data: data, encoding: .utf8) ?? ""
+            AppLog.relay.error("label update failed status=\(status) body=\(body, privacy: .public)")
+            throw RelayClientError.requestFailed(status: status, body: body)
+        }
+        AppLog.relay.info("label update ok accountId=\(accountId.rawValue, privacy: .public)")
+    }
+
     func removeAccount(_ accountId: AccountID, relayCredential: String) async throws {
         // Account ids contain `https://…|sub`. Putting that in the path breaks on `/`
         // (and some proxies reject `%2F`). Use a query param instead.
