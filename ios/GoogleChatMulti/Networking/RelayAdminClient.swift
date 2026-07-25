@@ -1,6 +1,17 @@
 import Foundation
 import GoogleChatMultiCore
 
+enum RelayClientError: LocalizedError {
+    case requestFailed(status: Int, body: String)
+
+    var errorDescription: String? {
+        switch self {
+        case let .requestFailed(status, body):
+            return "HTTP \(status): \(body)"
+        }
+    }
+}
+
 /// Talks to the notification relay for account register/teardown.
 /// Registration sends the Google refresh token once; teardown uses the opaque
 /// relay credential returned by register — never the shared admin secret.
@@ -37,6 +48,9 @@ actor RelayAdminClient {
         let (data, response) = try await session.data(for: request)
         let status = (response as? HTTPURLResponse)?.statusCode ?? -1
         guard (200..<300).contains(status) else {
+            if let body = String(data: data, encoding: .utf8), !body.isEmpty {
+                throw RelayClientError.requestFailed(status: status, body: body)
+            }
             throw ChatAPIError.httpStatus(status)
         }
         guard

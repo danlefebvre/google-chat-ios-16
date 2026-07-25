@@ -4,7 +4,8 @@ export type GoogleEventsClientOptions = {
   projectId: string;
   pubsubTopic: string;
   oauthClientId: string;
-  oauthClientSecret: string;
+  /** Required for Web clients; omit for iOS/installed clients (no secret). */
+  oauthClientSecret?: string;
   fetchImpl?: typeof fetch;
 };
 
@@ -252,17 +253,21 @@ async function pollOperation(
 
 async function refreshAccessToken(
   fetchImpl: typeof fetch,
-  input: { clientId: string; clientSecret: string; refreshToken: string },
+  input: { clientId: string; clientSecret?: string; refreshToken: string },
 ): Promise<string> {
+  const params = new URLSearchParams({
+    client_id: input.clientId,
+    refresh_token: input.refreshToken,
+    grant_type: "refresh_token",
+  });
+  // iOS / installed OAuth clients have no secret; Web clients must send one.
+  if (input.clientSecret) {
+    params.set("client_secret", input.clientSecret);
+  }
   const response = await fetchImpl("https://oauth2.googleapis.com/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      client_id: input.clientId,
-      client_secret: input.clientSecret,
-      refresh_token: input.refreshToken,
-      grant_type: "refresh_token",
-    }).toString(),
+    body: params.toString(),
   });
 
   if (!response.ok) {
@@ -293,7 +298,7 @@ export type AccountOwnershipVerifier = (
  */
 export function createGoogleAccountOwnershipVerifier(options: {
   oauthClientId: string;
-  oauthClientSecret: string;
+  oauthClientSecret?: string;
   fetchImpl?: typeof fetch;
 }): AccountOwnershipVerifier {
   const rawFetch = options.fetchImpl ?? fetch;
@@ -313,6 +318,11 @@ export function createGoogleAccountOwnershipVerifier(options: {
         },
       );
       if (!response.ok) {
+        console.error(
+          "ownership userinfo failed",
+          response.status,
+          await response.text(),
+        );
         return false;
       }
       const profile = (await response.json()) as {
@@ -346,7 +356,10 @@ export function createGoogleAccountOwnershipVerifier(options: {
         return false;
       }
       return true;
-    } catch {
+    } catch (err) {
+      // Common cause: Coolify uses Web client ID/secret while the app issued
+      // an iOS-client refresh token — Google rejects the refresh.
+      console.error("ownership verification failed", err);
       return false;
     }
   };

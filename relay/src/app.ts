@@ -30,7 +30,7 @@ export type CreateAppOptions = {
     projectId: string;
     pubsubTopic: string;
     oauthClientId: string;
-    oauthClientSecret: string;
+    oauthClientSecret?: string;
   };
 };
 

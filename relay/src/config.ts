@@ -34,8 +34,10 @@ export type AppConfig = {
   google?: {
     projectId: string;
     pubsubTopic: string;
+    /** Must match the client that issued refresh tokens (iOS GIDClientID). */
     oauthClientId: string;
-    oauthClientSecret: string;
+    /** Optional — only for Web OAuth clients. */
+    oauthClientSecret?: string;
   };
   quietHours: {
     startHour: number;
@@ -47,11 +49,11 @@ export type AppConfig = {
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   const parsed = envSchema.parse(env);
 
+  // Secret is optional so iOS OAuth clients (no secret) can refresh tokens.
   const googleReady =
     parsed.GOOGLE_PROJECT_ID &&
     parsed.GOOGLE_PUBSUB_TOPIC &&
-    parsed.GOOGLE_OAUTH_CLIENT_ID &&
-    parsed.GOOGLE_OAUTH_CLIENT_SECRET;
+    parsed.GOOGLE_OAUTH_CLIENT_ID;
 
   const quietHours =
     parsed.QUIET_HOURS_START !== undefined &&
@@ -80,7 +82,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
           projectId: parsed.GOOGLE_PROJECT_ID!,
           pubsubTopic: parsed.GOOGLE_PUBSUB_TOPIC!,
           oauthClientId: parsed.GOOGLE_OAUTH_CLIENT_ID!,
-          oauthClientSecret: parsed.GOOGLE_OAUTH_CLIENT_SECRET!,
+          oauthClientSecret: parsed.GOOGLE_OAUTH_CLIENT_SECRET || undefined,
         }
       : undefined,
     quietHours,
