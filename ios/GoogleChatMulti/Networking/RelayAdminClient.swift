@@ -80,6 +80,23 @@ actor RelayAdminClient {
         return credential
     }
 
+    /// Clears the relay's durable Bark badge counter so the next push starts at 1.
+    func resetBadge(relayCredential: String) async throws {
+        let url = try endpoint("badge/reset")
+        AppLog.relay.info("POST \(url.absoluteString, privacy: .public)")
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(relayCredential)", forHTTPHeaderField: "Authorization")
+        let (data, response) = try await session.data(for: request)
+        let status = (response as? HTTPURLResponse)?.statusCode ?? -1
+        guard (200..<300).contains(status) else {
+            let body = String(data: data, encoding: .utf8) ?? ""
+            AppLog.relay.error("badge reset failed status=\(status) body=\(body, privacy: .public)")
+            throw RelayClientError.requestFailed(status: status, body: body)
+        }
+        AppLog.relay.info("badge reset ok")
+    }
+
     func removeAccount(_ accountId: AccountID, relayCredential: String) async throws {
         // Account ids contain `https://…|sub`. Putting that in the path breaks on `/`
         // (and some proxies reject `%2F`). Use a query param instead.

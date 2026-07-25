@@ -216,6 +216,24 @@ export function createApp(options: CreateAppOptions): Express {
     await handleAccountDelete(req, res, req.params.accountId);
   });
 
+  // App ack: opening GoogleChatMulti clears the durable Bark badge counter so
+  // the next Chat push starts again at 1. Auth is any linked relay credential
+  // (never ADMIN_TOKEN). Does not push a Bark notification — iOS already
+  // cleared the icon when the user tapped/opened.
+  app.post("/badge/reset", (req, res) => {
+    const relayCredential = bearerToken(req);
+    if (!relayCredential) {
+      res.status(401).json({ error: "unauthorized" });
+      return;
+    }
+    if (!accounts.hasValidRelayCredential(relayCredential)) {
+      res.status(403).json({ error: "forbidden" });
+      return;
+    }
+    options.store.resetBadgeCount();
+    res.status(200).json({ ok: true, badge: 0 });
+  });
+
   app.use("/admin", (req, res, next) => {
     const token = bearerToken(req);
     if (!secretsEqual(token, options.adminToken)) {

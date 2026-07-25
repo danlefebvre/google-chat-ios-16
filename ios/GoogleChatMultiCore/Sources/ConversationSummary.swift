@@ -84,3 +84,31 @@ public enum InboxMerger {
         }
     }
 }
+
+/// Local inbox dismissals: hide until `lastActivityAt` advances past the stored stamp.
+public enum HiddenConversationFilter {
+    /// Drops rows still dismissed at-or-before their hide-time activity.
+    public static func excludingHidden(
+        _ rows: [ConversationSummary],
+        hiddenAt: [String: Date]
+    ) -> [ConversationSummary] {
+        guard !hiddenAt.isEmpty else { return rows }
+        return rows.filter { row in
+            guard let stamped = hiddenAt[row.compositeId] else { return true }
+            return row.lastActivityAt > stamped
+        }
+    }
+
+    /// Keeps only hide stamps that still suppress a conversation (no newer activity).
+    public static func prunedHidden(
+        _ hiddenAt: [String: Date],
+        against rows: [ConversationSummary]
+    ) -> [String: Date] {
+        guard !hiddenAt.isEmpty else { return hiddenAt }
+        let byId = Dictionary(uniqueKeysWithValues: rows.map { ($0.compositeId, $0) })
+        return hiddenAt.filter { compositeId, stamped in
+            guard let row = byId[compositeId] else { return false }
+            return row.lastActivityAt <= stamped
+        }
+    }
+}

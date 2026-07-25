@@ -20,7 +20,10 @@ struct RootView: View {
         .onChange(of: scenePhase) { phase in
             // Refresh the unified inbox whenever the app returns to the foreground.
             if phase == .active {
-                Task { await model.refresh() }
+                Task {
+                    await model.acknowledgeNotifications()
+                    await model.refresh()
+                }
             }
         }
         .overlay(alignment: .top) {

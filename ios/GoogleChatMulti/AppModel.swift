@@ -16,6 +16,9 @@ final class AppModel: ObservableObject {
 
     let authStore: AccountAuthStore
     private let cache: any ConversationCaching
+    private let defaults: UserDefaults
+    /// compositeId → lastActivityAt at dismiss time; cleared when activity advances.
+    @Published private(set) var hiddenConversationActivity: [String: Date] = [:]
     private var api: ChatAPIClient?
     private var sync: InboxSyncService?
     /// Serializes cached-inbox loads so a later refresh cannot be overwritten by stale cache.
@@ -23,18 +26,27 @@ final class AppModel: ObservableObject {
     /// Coalesces concurrent refresh triggers (home appear + scene active).
     private var refreshTask: Task<Void, Never>?
 
+    private static let hiddenConversationsKey = "hiddenConversationActivity"
+
     init(
         authStore: AccountAuthStore = KeychainAccountAuthStore(),
-        cache: any ConversationCaching = GRDBConversationCache()
+        cache: any ConversationCaching = GRDBConversationCache(),
+        defaults: UserDefaults = .standard
     ) {
         self.authStore = authStore
         self.cache = cache
+        self.defaults = defaults
+        hiddenConversationActivity = Self.loadHidden(from: defaults)
         bootstrap()
     }
 
     var visibleConversations: [ConversationSummary] {
         let filtered = InboxMerger.filter(conversations, by: filter)
-        return InboxMerger.search(filtered, query: searchQuery)
+        let searched = InboxMerger.search(filtered, query: searchQuery)
+        return HiddenConversationFilter.excludingHidden(
+            searched,
+            hiddenAt: hiddenConversationActivity
+        )
     }
 
     func bootstrap() {
@@ -50,7 +62,7 @@ final class AppModel: ObservableObject {
             do {
                 let rows = try await syncService?.cachedInbox() ?? []
                 try Task.checkCancellation()
-                conversations = rows
+                applyConversations(rows)
             } catch is CancellationError {
                 // Superseded by a newer bootstrap/refresh sequence.
             } catch {
@@ -72,6 +84,23 @@ final class AppModel: ObservableObject {
         refreshTask = nil
     }
 
+    /// Ack unread pushes: Bark clears the icon on tap, but the relay counter
+    /// must reset or the next message resumes at N+1.
+    func acknowledgeNotifications() async {
+        guard let client = RelayAdminClient.shared else { return }
+        guard let credential = accounts
+            .compactMap({ authStore.relayCredential(for: $0.id) })
+            .first(where: { !$0.isEmpty })
+        else { return }
+        do {
+            try await client.resetBadge(relayCredential: credential)
+        } catch {
+            AppLog.relay.error(
+                "badge ack failed: \(error.localizedDescription, privacy: .public)"
+            )
+        }
+    }
+
     private func performRefresh() async {
         // Wait for any in-flight cached load so stale results cannot overwrite refresh.
         await cachedInboxTask?.value
@@ -79,12 +108,25 @@ final class AppModel: ObservableObject {
         isRefreshing = true
         defer { isRefreshing = false }
         do {
-            conversations = try await sync.refreshAccounts(accounts)
+            applyConversations(try await sync.refreshAccounts(accounts))
         } catch {
             AppLog.inbox.error("refresh failed: \(error.localizedDescription, privacy: .public)")
             errorMessage = error.localizedDescription
             // Foreground fallback banner when sync/relay path is unhealthy.
             banner = "Could not refresh chats. Showing cached threads."
+        }
+    }
+
+    /// Removes a conversation from the inbox until a newer message updates its activity.
+    func hideFromInbox(_ conversation: ConversationSummary) {
+        hiddenConversationActivity[conversation.compositeId] = conversation.lastActivityAt
+        persistHidden()
+        if selectedConversation?.compositeId == conversation.compositeId {
+            selectedConversation = nil
+        }
+        path.removeAll { route in
+            if case let .thread(id) = route { return id == conversation.compositeId }
+            return false
         }
     }
 
@@ -152,7 +194,7 @@ final class AppModel: ObservableObject {
             errorMessage = error.localizedDescription
         }
         accounts = authStore.loadAccounts()
-        conversations = conversations.filter { $0.accountId != accountId }
+        applyConversations(conversations.filter { $0.accountId != accountId })
         if let relayWarning {
             banner = relayWarning
         }
@@ -179,6 +221,29 @@ final class AppModel: ObservableObject {
         } catch {
             banner = "Could not open link."
         }
+    }
+
+    private func applyConversations(_ rows: [ConversationSummary]) {
+        conversations = rows
+        let pruned = HiddenConversationFilter.prunedHidden(
+            hiddenConversationActivity,
+            against: rows
+        )
+        if pruned != hiddenConversationActivity {
+            hiddenConversationActivity = pruned
+            persistHidden()
+        }
+    }
+
+    private func persistHidden() {
+        let encoded = hiddenConversationActivity.mapValues { $0.timeIntervalSince1970 }
+        defaults.set(encoded, forKey: Self.hiddenConversationsKey)
+    }
+
+    private static func loadHidden(from defaults: UserDefaults) -> [String: Date] {
+        guard let raw = defaults.dictionary(forKey: hiddenConversationsKey) as? [String: Double]
+        else { return [:] }
+        return raw.mapValues { Date(timeIntervalSince1970: $0) }
     }
 }
 

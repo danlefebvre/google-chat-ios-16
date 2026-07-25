@@ -29,8 +29,9 @@ Manual smoke: `POST /admin/test-bark` (Bearer admin token)
 | POST | `/pubsub/push` | Pub/Sub push endpoint |
 | POST | `/accounts` | App: register account (body includes refresh token; response includes `relayCredential`) |
 | DELETE | `/accounts/:accountId` | App: teardown (`Authorization: Bearer <relayCredential>`) |
+| POST | `/badge/reset` | App: reset durable badge counter (`Bearer <relayCredential>`) |
 | POST | `/admin/test-bark` | Manual preview publish with badge (admin token) |
-| POST | `/admin/badge/reset` | Reset Bark badge to 0 (admin token) |
+| POST | `/admin/badge/reset` | Ops: reset badge + push `badge: 0` (admin token) |
 | POST | `/admin/accounts` | Ops: register Google account + create events subscription |
 | DELETE | `/admin/accounts/:accountId` | Ops: teardown (subscription → revoke token → wipe) |
 | POST | `/admin/accounts/:accountId/mute` | Mute account |
@@ -40,7 +41,7 @@ Manual smoke: `POST /admin/test-bark` (Bearer admin token)
 
 ## Badge behavior
 
-Each Chat notification increments a durable badge counter and sends it to Bark (`badge: N`). Opening Bark usually clears the iOS icon badge; call `POST /admin/badge/reset` (or open Bark) when you want the counter back to zero for the next wave of alerts.
+Each Chat notification increments a durable badge counter and sends it to Bark (`badge: N`). Opening Bark clears the **iOS icon** only — it does **not** zero the relay counter. GoogleChat Multi calls `POST /badge/reset` (relay credential) when it becomes active, so the next Chat push starts again at `badge: 1`. Ops can also force a clear with `POST /admin/badge/reset`.
 
 Tap actions use the same `googlechatmulti://space/…` deep links as before.
 

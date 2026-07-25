@@ -124,4 +124,80 @@ final class InboxMergerTests: XCTestCase {
         XCTAssertEqual(InboxMerger.search(rows, query: "deploy").map(\.title), ["#eng-standup"])
         XCTAssertEqual(InboxMerger.search(rows, query: "ENG").map(\.title), ["#eng-standup"])
     }
+
+    func testExcludingHiddenKeepsRowUntilNewerActivity() {
+        let account = AccountID(issuer: "https://accounts.google.com", subject: "work")
+        let stamped = Date(timeIntervalSince1970: 1000)
+        let hidden = ConversationSummary(
+            accountId: account,
+            accountLabel: "Work",
+            accountColorHex: "#C45C26",
+            spaceName: "spaces/A",
+            title: "Hidden",
+            lastMessagePreview: "old",
+            lastActivityAt: stamped,
+            unreadCount: 0,
+            isDirectMessage: false
+        )
+        let visible = ConversationSummary(
+            accountId: account,
+            accountLabel: "Work",
+            accountColorHex: "#C45C26",
+            spaceName: "spaces/B",
+            title: "Visible",
+            lastMessagePreview: "hi",
+            lastActivityAt: stamped,
+            unreadCount: 0,
+            isDirectMessage: false
+        )
+        let hiddenAt = [hidden.compositeId: stamped]
+
+        XCTAssertEqual(
+            HiddenConversationFilter.excludingHidden([hidden, visible], hiddenAt: hiddenAt).map(\.title),
+            ["Visible"]
+        )
+
+        var revived = hidden
+        revived.lastActivityAt = Date(timeIntervalSince1970: 1001)
+        XCTAssertEqual(
+            HiddenConversationFilter.excludingHidden([revived, visible], hiddenAt: hiddenAt).map(\.title),
+            ["Hidden", "Visible"]
+        )
+    }
+
+    func testPrunedHiddenDropsStampsAfterNewActivityOrMissingRow() {
+        let account = AccountID(issuer: "https://accounts.google.com", subject: "work")
+        let stamped = Date(timeIntervalSince1970: 1000)
+        let stillHidden = ConversationSummary(
+            accountId: account,
+            accountLabel: "Work",
+            accountColorHex: "#C45C26",
+            spaceName: "spaces/A",
+            title: "A",
+            lastMessagePreview: "old",
+            lastActivityAt: stamped,
+            unreadCount: 0,
+            isDirectMessage: false
+        )
+        let revived = ConversationSummary(
+            accountId: account,
+            accountLabel: "Work",
+            accountColorHex: "#C45C26",
+            spaceName: "spaces/B",
+            title: "B",
+            lastMessagePreview: "new",
+            lastActivityAt: Date(timeIntervalSince1970: 2000),
+            unreadCount: 1,
+            isDirectMessage: false
+        )
+        let goneId = "\(account.rawValue):spaces/GONE"
+        let hiddenAt = [
+            stillHidden.compositeId: stamped,
+            revived.compositeId: stamped,
+            goneId: stamped,
+        ]
+
+        let pruned = HiddenConversationFilter.prunedHidden(hiddenAt, against: [stillHidden, revived])
+        XCTAssertEqual(pruned.keys.sorted(), [stillHidden.compositeId])
+    }
 }

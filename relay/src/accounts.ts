@@ -143,6 +143,16 @@ export class AccountService {
     }
   }
 
+  /** True when the credential matches any linked account (e.g. badge ack). */
+  hasValidRelayCredential(relayCredential: string): boolean {
+    if (!relayCredential) {
+      return false;
+    }
+    return this.store
+      .listAccounts()
+      .some((account) => this.ownsRelayCredential(account.accountId, relayCredential));
+  }
+
   setAccountMuted(accountId: string, muted: boolean): void {
     const existing = this.store.getAccount(accountId);
     if (!existing) {
