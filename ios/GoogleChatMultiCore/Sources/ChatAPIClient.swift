@@ -7,11 +7,27 @@ public protocol TokenProviding: Sendable {
     func accessToken(for accountId: AccountID) async throws -> String
 }
 
-public enum ChatAPIError: Error, Equatable {
+public enum ChatAPIError: Error, Equatable, LocalizedError {
     case invalidURL
     case httpStatus(Int)
     case decodingFailed
     case emptyBody
+
+    public var errorDescription: String? {
+        switch self {
+        case .invalidURL:
+            return "Invalid URL while calling Google Chat API."
+        case let .httpStatus(code):
+            if code < 0 {
+                return "Network request failed (no HTTP response)."
+            }
+            return "Google Chat API HTTP \(code)."
+        case .decodingFailed:
+            return "Could not decode Google Chat API response."
+        case .emptyBody:
+            return "Google Chat API returned an empty body."
+        }
+    }
 }
 
 public actor ChatAPIClient {
