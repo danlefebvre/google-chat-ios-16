@@ -19,6 +19,10 @@ struct ThreadView: View {
     @State private var scrollToNewestRequested = false
     /// Keep the previously oldest bubble in place after prepending an older page.
     @State private var preserveScrollMessageId: String?
+    /// Message `name` that should show the Seen receipt (DM last-read only).
+    @State private var lastSeenMessageName: String?
+    /// Peer read cursor when known (linked-account DM) or inferred from replies.
+    @State private var peerLastReadTime: Date?
 
     private var conversation: ConversationSummary? {
         model.conversations.first { $0.compositeId == compositeId }
@@ -56,6 +60,7 @@ struct ThreadView: View {
                                 message: message,
                                 senderLabel: senderLabel(for: message),
                                 isFromSelf: isFromSelf(message),
+                                showSeen: message.name == lastSeenMessageName,
                                 accountId: conversation?.accountId,
                                 tokenProvider: model.authStore.asTokenProvider(),
                                 onReact: { unicode in
@@ -124,10 +129,13 @@ struct ThreadView: View {
         nextPageToken = nil
         scrollToNewestRequested = false
         preserveScrollMessageId = nil
+        lastSeenMessageName = nil
+        peerLastReadTime = nil
 
         do {
             var map = memberNames
             var candidateUserNames = Set<String>([me])
+            var peerUserNames: [String] = []
 
             if let members = try? await api.listMembers(
                 accountId: conversation.accountId,
@@ -137,6 +145,9 @@ struct ThreadView: View {
                 for membership in members.memberships {
                     guard let member = membership.member, let name = member.name else { continue }
                     candidateUserNames.insert(name)
+                    if name != me {
+                        peerUserNames.append(name)
+                    }
                     if member.hasHumanReadableName,
                        let label = member.displayName?.trimmingCharacters(in: .whitespacesAndNewlines)
                     {
@@ -167,6 +178,12 @@ struct ThreadView: View {
             nextPageToken = response.nextPageToken
             scrollToNewestRequested = scrollToNewest && !response.messages.isEmpty
             messages = response.messages
+            await refreshSeenReceipt(
+                api: api,
+                conversation: conversation,
+                peerUserNames: peerUserNames,
+                loadedMessages: response.messages
+            )
             do {
                 try await api.markSpaceRead(
                     accountId: conversation.accountId,
@@ -210,6 +227,7 @@ struct ThreadView: View {
                 preserveScrollMessageId = anchorId
             }
             messages = merged
+            updateLastSeenMessageName(using: merged)
         } catch {
             // Keep the current page token so scrolling up can retry.
             model.banner = "Couldn’t load older messages."
@@ -266,6 +284,8 @@ struct ThreadView: View {
             scrollToNewestRequested = true
             messages.insert(message, at: 0)
             draft = ""
+            // Newly sent messages are unseen until the peer reads / replies.
+            updateLastSeenMessageName(using: messages)
         } catch {
             model.banner = "Send failed."
         }
@@ -315,9 +335,72 @@ struct ThreadView: View {
             scrollToNewestRequested = true
             messages.insert(message, at: 0)
             draft = ""
+            updateLastSeenMessageName(using: messages)
         } catch {
             model.banner = "Attachment upload failed."
         }
+    }
+
+    private func refreshSeenReceipt(
+        api: ChatAPIClient,
+        conversation: ConversationSummary,
+        peerUserNames: [String],
+        loadedMessages: [ChatMessage]
+    ) async {
+        guard conversation.isDirectMessage else {
+            peerLastReadTime = nil
+            lastSeenMessageName = nil
+            return
+        }
+
+        let me = conversation.accountId.chatUserName
+        var readTime: Date?
+
+        // Real receipt when the DM peer is another account signed into this app.
+        for peerName in peerUserNames {
+            guard let peerAccount = model.accounts.first(where: {
+                $0.id.chatUserName == peerName && $0.id != conversation.accountId
+            }) else { continue }
+            if let state = try? await api.getSpaceReadState(
+                accountId: peerAccount.id,
+                spaceName: conversation.spaceName
+            ), let lastRead = state.lastReadTime {
+                readTime = lastRead
+                break
+            }
+        }
+
+        let inferred = MessageSeenReceipt.inferredPeerLastReadTime(
+            in: loadedMessages,
+            selfUserName: me
+        )
+        if let inferred {
+            readTime = readTime.map { max($0, inferred) } ?? inferred
+        }
+
+        peerLastReadTime = readTime
+        updateLastSeenMessageName(using: loadedMessages)
+    }
+
+    private func updateLastSeenMessageName(using loadedMessages: [ChatMessage]) {
+        guard let conversation, conversation.isDirectMessage else {
+            lastSeenMessageName = nil
+            return
+        }
+        let me = selfUserName ?? conversation.accountId.chatUserName
+        // Keep reply-inferred read time in sync as pages merge; never lower a
+        // stronger linked-account cursor already stored in `peerLastReadTime`.
+        if let inferred = MessageSeenReceipt.inferredPeerLastReadTime(
+            in: loadedMessages,
+            selfUserName: me
+        ) {
+            peerLastReadTime = peerLastReadTime.map { max($0, inferred) } ?? inferred
+        }
+        lastSeenMessageName = MessageSeenReceipt.lastSeenSelfMessageName(
+            in: loadedMessages,
+            selfUserName: me,
+            peerLastReadTime: peerLastReadTime
+        )
     }
 
     private func apiClient() async -> ChatAPIClient? {
@@ -334,6 +417,7 @@ struct MessageBubble: View {
     let message: ChatMessage
     let senderLabel: String
     let isFromSelf: Bool
+    var showSeen: Bool = false
     let accountId: AccountID?
     let tokenProvider: (any TokenProviding)?
     let onReact: (String) async -> Void
@@ -391,6 +475,13 @@ struct MessageBubble: View {
                 .padding(10)
                 .background(isFromSelf ? Color.accentColor : Color("BubbleFill"))
                 .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+
+                if showSeen && isFromSelf {
+                    Text("Seen")
+                        .font(.caption2)
+                        .foregroundStyle(Color("SecondaryText"))
+                        .accessibilityLabel("Seen")
+                }
 
                 if let reactions = message.emojiReactionSummaries, !reactions.isEmpty {
                     HStack(spacing: 6) {
