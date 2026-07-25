@@ -38,7 +38,8 @@ final class PeopleClientTests: XCTestCase {
     func testBatchGetParsesDisplayNames() async throws {
         let account = AccountID(issuer: "https://accounts.google.com", subject: "me")
         URLProtocolStub.handler = { request in
-            XCTAssertTrue(request.url!.absoluteString.contains("people:batchGet"))
+            let url = request.url!.absoluteString
+            XCTAssertTrue(url.contains("people:batchGet"))
             let json = """
             {
               "responses": [
@@ -78,6 +79,101 @@ final class PeopleClientTests: XCTestCase {
         )
         XCTAssertEqual(names["users/111"], "Alice Example")
         XCTAssertEqual(names["users/222"], "Bob Builder")
+    }
+
+    func testOtherContactsFallbackFillsEmptyBatchGetNames() async throws {
+        let account = AccountID(issuer: "https://accounts.google.com", subject: "me")
+        URLProtocolStub.handler = { request in
+            let url = request.url!.absoluteString
+            if url.contains("people:batchGet") {
+                let json = """
+                {
+                  "responses": [
+                    {
+                      "requestedResourceName": "people/999",
+                      "person": { "resourceName": "people/999" }
+                    }
+                  ]
+                }
+                """.data(using: .utf8)!
+                return (
+                    HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
+                    json
+                )
+            }
+            if url.contains("otherContacts") {
+                let json = """
+                {
+                  "otherContacts": [
+                    {
+                      "resourceName": "otherContacts/c1",
+                      "names": [{ "displayName": "Casey Chat" }],
+                      "metadata": {
+                        "sources": [
+                          { "type": "PROFILE", "id": "999" },
+                          { "type": "OTHER_CONTACT", "id": "c1" }
+                        ]
+                      }
+                    }
+                  ]
+                }
+                """.data(using: .utf8)!
+                return (
+                    HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
+                    json
+                )
+            }
+            throw URLError(.badURL)
+        }
+
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [URLProtocolStub.self]
+        let client = PeopleClient(
+            tokens: StubTokens(["\(account.rawValue)": "tok"]),
+            session: URLSession(configuration: config)
+        )
+
+        let names = try await client.displayNames(
+            accountId: account,
+            chatUserNames: ["users/999"]
+        )
+        XCTAssertEqual(names["users/999"], "Casey Chat")
+    }
+
+    func testBatchGetFallsBackToEmailWhenNamesMissing() async throws {
+        let account = AccountID(issuer: "https://accounts.google.com", subject: "me")
+        URLProtocolStub.handler = { request in
+            let json = """
+            {
+              "responses": [
+                {
+                  "requestedResourceName": "people/555",
+                  "person": {
+                    "resourceName": "people/555",
+                    "emailAddresses": [{ "value": "pat@example.com" }]
+                  }
+                }
+              ]
+            }
+            """.data(using: .utf8)!
+            return (
+                HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
+                json
+            )
+        }
+
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [URLProtocolStub.self]
+        let client = PeopleClient(
+            tokens: StubTokens(["\(account.rawValue)": "tok"]),
+            session: URLSession(configuration: config)
+        )
+
+        let names = try await client.displayNames(
+            accountId: account,
+            chatUserNames: ["users/555"]
+        )
+        XCTAssertEqual(names["users/555"], "pat@example.com")
     }
 }
 
