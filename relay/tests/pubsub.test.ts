@@ -63,9 +63,13 @@ describe("POST /pubsub/push", () => {
         message: {
           data: encodeData(messagePayload),
           attributes: {
-            accountId: "iss|sub-work",
+            // Production Workspace Events shape (no accountId attribute).
+            "ce-source":
+              "//workspaceevents.googleapis.com/subscriptions/sub-1",
             "ce-type": "google.workspace.chat.message.v1.created",
           },
+          orderingKey:
+            "//workspaceevents.googleapis.com/subscriptions/sub-1",
         },
       });
 

@@ -123,10 +123,44 @@ public struct ChatMessage: Codable, Hashable, Identifiable, Sendable {
 public struct ChatSender: Codable, Hashable, Sendable {
     public var name: String?
     public var displayName: String?
+    public var type: String?
 
-    public init(name: String? = nil, displayName: String? = nil) {
+    public init(name: String? = nil, displayName: String? = nil, type: String? = nil) {
         self.name = name
         self.displayName = displayName
+        self.type = type
+    }
+
+    /// Chat API often omits `displayName`; fall back to a short user id fragment.
+    public var resolvedDisplayName: String {
+        let trimmed = displayName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if !trimmed.isEmpty { return trimmed }
+        if let name, let last = name.split(separator: "/").last, !last.isEmpty {
+            return String(last)
+        }
+        return "Someone"
+    }
+}
+
+public struct MembershipListResponse: Codable, Sendable {
+    public var memberships: [ChatMembership]
+    public var nextPageToken: String?
+
+    public init(memberships: [ChatMembership], nextPageToken: String? = nil) {
+        self.memberships = memberships
+        self.nextPageToken = nextPageToken
+    }
+}
+
+public struct ChatMembership: Codable, Hashable, Sendable {
+    public var name: String?
+    public var state: String?
+    public var member: ChatSender?
+
+    public init(name: String? = nil, state: String? = nil, member: ChatSender? = nil) {
+        self.name = name
+        self.state = state
+        self.member = member
     }
 }
 

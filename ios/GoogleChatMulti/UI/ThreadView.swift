@@ -7,6 +7,7 @@ struct ThreadView: View {
     let compositeId: String
 
     @State private var messages: [ChatMessage] = []
+    @State private var memberNames: [String: String] = [:]
     @State private var draft = ""
     @State private var isSending = false
     @State private var loadError: String?
@@ -27,7 +28,10 @@ struct ThreadView: View {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 10) {
                         ForEach(messages.reversed()) { message in
-                            MessageBubble(message: message) {
+                            MessageBubble(
+                                message: message,
+                                senderLabel: senderLabel(for: message)
+                            ) {
                                 await react(to: message, unicode: "👍")
                             }
                             .id(message.id)
@@ -79,6 +83,19 @@ struct ThreadView: View {
               let api = await apiClient()
         else { return }
         do {
+            if let members = try? await api.listMembers(
+                accountId: conversation.accountId,
+                spaceName: conversation.spaceName,
+                showInvited: true
+            ) {
+                var map: [String: String] = [:]
+                for membership in members.memberships {
+                    guard let member = membership.member, let name = member.name else { continue }
+                    let label = member.resolvedDisplayName
+                    if label != "Someone" { map[name] = label }
+                }
+                memberNames = map
+            }
             let response = try await api.listMessages(
                 accountId: conversation.accountId,
                 spaceName: conversation.spaceName,
@@ -92,6 +109,13 @@ struct ThreadView: View {
         } catch {
             loadError = error.localizedDescription
         }
+    }
+
+    private func senderLabel(for message: ChatMessage) -> String {
+        if let name = message.sender?.name, let mapped = memberNames[name], !mapped.isEmpty {
+            return mapped
+        }
+        return message.sender?.resolvedDisplayName ?? "Someone"
     }
 
     private func send() async {
@@ -168,11 +192,12 @@ struct ThreadView: View {
 
 struct MessageBubble: View {
     let message: ChatMessage
+    let senderLabel: String
     let onReact: () async -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(message.sender?.displayName ?? "Someone")
+            Text(senderLabel)
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(Color("SecondaryText"))
             Text(message.text ?? "(attachment)")

@@ -74,6 +74,7 @@ final class GoogleSignInCoordinator: ObservableObject {
             "https://www.googleapis.com/auth/chat.spaces",
             "https://www.googleapis.com/auth/chat.messages",
             "https://www.googleapis.com/auth/chat.messages.readonly",
+            "https://www.googleapis.com/auth/chat.memberships.readonly",
             "https://www.googleapis.com/auth/chat.users.readstate",
         ]
 

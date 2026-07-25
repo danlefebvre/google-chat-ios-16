@@ -1,12 +1,14 @@
 import { parseChatEvent, shouldNotify } from "./events.js";
 import { formatNtfyNotification, type NtfyPublisher } from "./ntfy.js";
 import type { AccountStore } from "./store.js";
+import { normalizeSubscriptionName } from "./store.js";
 
 export type PubSubPushBody = {
   message?: {
     data?: string;
     attributes?: Record<string, string>;
     messageId?: string;
+    orderingKey?: string;
   };
 };
 
@@ -30,13 +32,19 @@ export async function handlePubSubPush(deps: {
   }
 
   const attributes = message.attributes ?? {};
-  const accountId = attributes.accountId ?? attributes.account_id;
-  if (!accountId) {
-    return { status: 204, skipped: "missing_account_id" };
-  }
+  // Real Workspace Events messages identify the subscription via ce-source /
+  // orderingKey — they do NOT include our local accountId attribute.
+  const subscriptionHint =
+    attributes["ce-source"] ??
+    attributes.ceSource ??
+    message.orderingKey ??
+    attributes.accountId ??
+    attributes.account_id ??
+    "";
 
-  const account = deps.store.getAccount(accountId);
+  const account = resolveAccount(deps.store, subscriptionHint);
   if (!account || !account.ntfyBindingActive) {
+    console.warn("pubsub skip: unknown subscription", subscriptionHint);
     return { status: 204, skipped: "unknown_or_inactive_account" };
   }
 
@@ -47,13 +55,14 @@ export async function handlePubSubPush(deps: {
     "";
 
   const parsed = parseChatEvent({
-    accountId,
+    accountId: account.accountId,
     accountLabel: account.label,
     ceType,
     data,
   });
 
   if (!parsed) {
+    console.warn("pubsub skip: unsupported event", ceType);
     return { status: 204, skipped: "unsupported_event" };
   }
 
@@ -94,4 +103,16 @@ export async function handlePubSubPush(deps: {
   });
 
   return { status: 204 };
+}
+
+function resolveAccount(store: AccountStore, hint: string) {
+  if (!hint) {
+    return undefined;
+  }
+  // Prefer explicit accountId (tests / legacy) before subscription lookup.
+  const byId = store.getAccount(hint);
+  if (byId) {
+    return byId;
+  }
+  return store.getAccountBySubscription(normalizeSubscriptionName(hint));
 }

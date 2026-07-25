@@ -90,6 +90,9 @@ public actor InboxSyncService {
     }
 
     private func makeSummary(account: LinkedAccount, space: ChatSpace) async -> ConversationSummary {
+        let memberNames = await memberDisplayNames(accountId: account.id, spaceName: space.name)
+        let title = resolveSpaceTitle(space: space, memberNames: memberNames)
+
         let preview: String
         let activity: Date
         if let messages = try? await api.listMessages(
@@ -97,7 +100,7 @@ public actor InboxSyncService {
             spaceName: space.name,
             pageSize: 1
         ), let latest = messages.messages.first {
-            let sender = latest.sender?.displayName ?? "Someone"
+            let sender = resolveSenderName(latest.sender, memberNames: memberNames)
             let text = latest.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             preview = text.isEmpty ? "\(sender): (attachment)" : "\(sender): \(text)"
             activity = latest.createTime ?? space.lastActiveTime ?? .distantPast
@@ -111,12 +114,52 @@ public actor InboxSyncService {
             accountLabel: account.label,
             accountColorHex: account.colorHex,
             spaceName: space.name,
-            title: space.resolvedTitle,
+            title: title,
             lastMessagePreview: preview,
             lastActivityAt: activity,
             unreadCount: 0,
             isDirectMessage: space.isDirectMessage
         )
+    }
+
+    private func memberDisplayNames(accountId: AccountID, spaceName: String) async -> [String: String] {
+        guard let response = try? await api.listMembers(
+            accountId: accountId,
+            spaceName: spaceName,
+            showInvited: true
+        ) else {
+            return [:]
+        }
+        var map: [String: String] = [:]
+        for membership in response.memberships {
+            guard let member = membership.member, let name = member.name else { continue }
+            let label = member.resolvedDisplayName
+            if label != "Someone" {
+                map[name] = label
+            }
+        }
+        return map
+    }
+
+    private func resolveSpaceTitle(space: ChatSpace, memberNames: [String: String]) -> String {
+        let existing = space.resolvedTitle
+        if !space.isDirectMessage { return existing }
+        if existing != "DM", existing != space.name { return existing }
+        // DM titles are often empty — use the other human member's name.
+        let others = memberNames.values.filter { !$0.isEmpty }
+        if others.count == 1 { return others[0] }
+        if others.count > 1 { return others.sorted().joined(separator: ", ") }
+        return existing
+    }
+
+    private func resolveSenderName(_ sender: ChatSender?, memberNames: [String: String]) -> String {
+        guard let sender else { return "Someone" }
+        let trimmed = sender.displayName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if !trimmed.isEmpty { return trimmed }
+        if let name = sender.name, let mapped = memberNames[name], !mapped.isEmpty {
+            return mapped
+        }
+        return sender.resolvedDisplayName
     }
 
     private func listAllSpaces(accountId: AccountID) async throws -> [ChatSpace] {

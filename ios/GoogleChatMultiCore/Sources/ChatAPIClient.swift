@@ -81,6 +81,25 @@ public actor ChatAPIClient {
         return try await get(url, accountId: accountId)
     }
 
+    /// Lists space members (used to resolve DM titles / missing sender display names).
+    public func listMembers(
+        accountId: AccountID,
+        spaceName: String,
+        pageSize: Int = 100,
+        showInvited: Bool = false
+    ) async throws -> MembershipListResponse {
+        var components = URLComponents(
+            url: baseURL.appendingPathComponent("\(spaceName)/members"),
+            resolvingAgainstBaseURL: false
+        )!
+        components.queryItems = [
+            URLQueryItem(name: "pageSize", value: String(pageSize)),
+            URLQueryItem(name: "showInvited", value: showInvited ? "true" : "false"),
+        ]
+        guard let url = components.url else { throw ChatAPIError.invalidURL }
+        return try await get(url, accountId: accountId)
+    }
+
     public func sendMessage(
         accountId: AccountID,
         spaceName: String,

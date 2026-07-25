@@ -11,10 +11,26 @@ import type { AccountRecord, QuietHours } from "./types.js";
 export interface AccountStore {
   upsertAccount(account: AccountRecord): void;
   getAccount(accountId: string): AccountRecord | undefined;
+  /** Match a Workspace Events subscription resource name to a linked account. */
+  getAccountBySubscription(subscriptionName: string): AccountRecord | undefined;
   listAccounts(): AccountRecord[];
   deleteAccount(accountId: string): void;
   getQuietHours(): QuietHours | null;
   setQuietHours(quiet: QuietHours | null): void;
+}
+
+/** Normalize `//workspaceevents.googleapis.com/subscriptions/X` → `subscriptions/X`. */
+export function normalizeSubscriptionName(raw: string): string {
+  const trimmed = raw.trim();
+  const marker = "/subscriptions/";
+  const idx = trimmed.lastIndexOf(marker);
+  if (idx >= 0) {
+    return `subscriptions/${trimmed.slice(idx + marker.length)}`;
+  }
+  if (trimmed.startsWith("subscriptions/")) {
+    return trimmed;
+  }
+  return trimmed;
 }
 
 type PersistedState = {
@@ -33,6 +49,19 @@ export class InMemoryStore implements AccountStore {
   getAccount(accountId: string): AccountRecord | undefined {
     const found = this.accounts.get(accountId);
     return found ? { ...found } : undefined;
+  }
+
+  getAccountBySubscription(subscriptionName: string): AccountRecord | undefined {
+    const want = normalizeSubscriptionName(subscriptionName);
+    for (const account of this.accounts.values()) {
+      if (
+        account.subscriptionName &&
+        normalizeSubscriptionName(account.subscriptionName) === want
+      ) {
+        return { ...account };
+      }
+    }
+    return undefined;
   }
 
   listAccounts(): AccountRecord[] {
@@ -69,6 +98,19 @@ export class FileAccountStore implements AccountStore {
   getAccount(accountId: string): AccountRecord | undefined {
     const found = this.accounts.get(accountId);
     return found ? { ...found } : undefined;
+  }
+
+  getAccountBySubscription(subscriptionName: string): AccountRecord | undefined {
+    const want = normalizeSubscriptionName(subscriptionName);
+    for (const account of this.accounts.values()) {
+      if (
+        account.subscriptionName &&
+        normalizeSubscriptionName(account.subscriptionName) === want
+      ) {
+        return { ...account };
+      }
+    }
+    return undefined;
   }
 
   listAccounts(): AccountRecord[] {
