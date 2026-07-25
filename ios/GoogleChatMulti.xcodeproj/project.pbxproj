@@ -24,6 +24,7 @@
 		A10000000000000000000010 /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = A30000000000000000000002 /* GoogleSignIn */; };
 		A10000000000000000000011 /* Logging.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000010 /* Logging.swift */; };
 		A10000000000000000000012 /* AttachmentImageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000011 /* AttachmentImageView.swift */; };
+		A10000000000000000000013 /* FullScreenImageViewer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000012 /* FullScreenImageViewer.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -44,6 +45,7 @@
 		A2000000000000000000000F /* AppBootstrap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppBootstrap.swift; sourceTree = "<group>"; };
 		A20000000000000000000010 /* Logging.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Logging.swift; sourceTree = "<group>"; };
 		A20000000000000000000011 /* AttachmentImageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttachmentImageView.swift; sourceTree = "<group>"; };
+		A20000000000000000000012 /* FullScreenImageViewer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FullScreenImageViewer.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -125,6 +127,7 @@
 				A20000000000000000000008 /* InboxView.swift */,
 				A20000000000000000000009 /* ThreadView.swift */,
 				A20000000000000000000011 /* AttachmentImageView.swift */,
+				A20000000000000000000012 /* FullScreenImageViewer.swift */,
 				A2000000000000000000000A /* AccountManagerView.swift */,
 			);
 			path = UI;
@@ -227,6 +230,7 @@
 				A10000000000000000000008 /* InboxView.swift in Sources */,
 				A10000000000000000000009 /* ThreadView.swift in Sources */,
 				A10000000000000000000012 /* AttachmentImageView.swift in Sources */,
+				A10000000000000000000013 /* FullScreenImageViewer.swift in Sources */,
 				A1000000000000000000000A /* AccountManagerView.swift in Sources */,
 				A1000000000000000000000B /* AttachmentMemory.swift in Sources */,
 			);

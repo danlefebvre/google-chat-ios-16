@@ -11,6 +11,7 @@ struct AttachmentImageView: View {
     @State private var image: UIImage?
     @State private var errorText: String?
     @State private var isLoading = false
+    @State private var showFullScreen = false
 
     var body: some View {
         Group {
@@ -20,6 +21,13 @@ struct AttachmentImageView: View {
                     .scaledToFit()
                     .frame(maxWidth: 260, maxHeight: 260)
                     .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .onTapGesture { showFullScreen = true }
+                    .accessibilityAddTraits(.isButton)
+                    .accessibilityHint("Shows the image full screen")
+                    .fullScreenCover(isPresented: $showFullScreen) {
+                        FullScreenImageViewer(image: image)
+                    }
             } else if isLoading {
                 ProgressView()
                     .frame(width: 80, height: 80)
