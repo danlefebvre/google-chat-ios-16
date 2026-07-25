@@ -112,7 +112,7 @@ actor RelayAdminClient {
             throw RelayClientError.requestFailed(status: -1, body: "invalid relay label URL")
         }
         AppLog.relay.info(
-            "PATCH \(url.absoluteString, privacy: .public) label=\(label, privacy: .public)"
+            "PATCH \(url.absoluteString, privacy: .public) label=\(label)"
         )
         var request = URLRequest(url: url)
         request.httpMethod = "PATCH"
