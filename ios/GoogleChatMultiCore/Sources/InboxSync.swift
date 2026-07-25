@@ -13,6 +13,7 @@ public enum InboxSyncError: Error, Equatable, Sendable {
 
 public actor InboxSyncService {
     private let api: ChatAPIClient
+    private let people: PeopleClient?
     private let cache: any ConversationCaching
     private let previewConcurrencyLimit: Int
     private let maxSpacePages: Int
@@ -20,10 +21,12 @@ public actor InboxSyncService {
     public init(
         api: ChatAPIClient,
         cache: any ConversationCaching,
+        people: PeopleClient? = nil,
         previewConcurrencyLimit: Int = 4,
         maxSpacePages: Int = 100
     ) {
         self.api = api
+        self.people = people
         self.cache = cache
         self.previewConcurrencyLimit = max(1, previewConcurrencyLimit)
         self.maxSpacePages = max(1, maxSpacePages)
@@ -91,7 +94,11 @@ public actor InboxSyncService {
 
     private func makeSummary(account: LinkedAccount, space: ChatSpace) async -> ConversationSummary {
         let memberNames = await memberDisplayNames(accountId: account.id, spaceName: space.name)
-        let title = resolveSpaceTitle(space: space, memberNames: memberNames)
+        let title = resolveSpaceTitle(
+            space: space,
+            memberNames: memberNames,
+            selfUserName: account.id.chatUserName
+        )
 
         let preview: String
         let activity: Date
@@ -133,20 +140,35 @@ public actor InboxSyncService {
         var map: [String: String] = [:]
         for membership in response.memberships {
             guard let member = membership.member, let name = member.name else { continue }
-            let label = member.resolvedDisplayName
-            if label != "Someone" {
+            if member.hasHumanReadableName,
+               let label = member.displayName?.trimmingCharacters(in: .whitespacesAndNewlines)
+            {
                 map[name] = label
+            }
+        }
+        // Chat user-auth responses often omit displayName — resolve via People API.
+        if let people {
+            let missing = response.memberships.compactMap(\.member?.name).filter { map[$0] == nil }
+            if let resolved = try? await people.displayNames(accountId: accountId, chatUserNames: missing) {
+                for (key, value) in resolved { map[key] = value }
             }
         }
         return map
     }
 
-    private func resolveSpaceTitle(space: ChatSpace, memberNames: [String: String]) -> String {
+    private func resolveSpaceTitle(
+        space: ChatSpace,
+        memberNames: [String: String],
+        selfUserName: String
+    ) -> String {
         let existing = space.resolvedTitle
         if !space.isDirectMessage { return existing }
         if existing != "DM", existing != space.name { return existing }
         // DM titles are often empty — use the other human member's name.
-        let others = memberNames.values.filter { !$0.isEmpty }
+        let others = memberNames
+            .filter { $0.key != selfUserName }
+            .map(\.value)
+            .filter { !$0.isEmpty }
         if others.count == 1 { return others[0] }
         if others.count > 1 { return others.sorted().joined(separator: ", ") }
         return existing
@@ -154,12 +176,15 @@ public actor InboxSyncService {
 
     private func resolveSenderName(_ sender: ChatSender?, memberNames: [String: String]) -> String {
         guard let sender else { return "Someone" }
-        let trimmed = sender.displayName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        if !trimmed.isEmpty { return trimmed }
+        if sender.hasHumanReadableName,
+           let trimmed = sender.displayName?.trimmingCharacters(in: .whitespacesAndNewlines)
+        {
+            return trimmed
+        }
         if let name = sender.name, let mapped = memberNames[name], !mapped.isEmpty {
             return mapped
         }
-        return sender.resolvedDisplayName
+        return "Someone"
     }
 
     private func listAllSpaces(accountId: AccountID) async throws -> [ChatSpace] {

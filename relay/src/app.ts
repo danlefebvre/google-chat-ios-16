@@ -174,9 +174,19 @@ export function createApp(options: CreateAppOptions): Express {
     }
   });
 
-  app.delete("/accounts/:accountId", async (req, res) => {
+  // Prefer ?accountId=… — path params break on issuer URLs that contain `/`
+  // (https://accounts.google.com|sub). Keep :accountId for simple legacy ids.
+  const handleAccountDelete = async (
+    req: Request,
+    res: Response,
+    accountIdRaw: string | undefined,
+  ) => {
     try {
-      const accountId = decodeURIComponent(req.params.accountId);
+      const accountId = accountIdRaw ? decodeURIComponent(accountIdRaw) : "";
+      if (!accountId) {
+        res.status(400).json({ error: "missing_account_id" });
+        return;
+      }
       const relayCredential =
         bearerToken(req) || (req.body?.relayCredential as string | undefined);
       if (!relayCredential) {
@@ -193,6 +203,16 @@ export function createApp(options: CreateAppOptions): Express {
       console.error("remove account failed", err);
       res.status(500).json({ error: "remove_failed" });
     }
+  };
+
+  app.delete("/accounts", async (req, res) => {
+    const accountId =
+      typeof req.query.accountId === "string" ? req.query.accountId : undefined;
+    await handleAccountDelete(req, res, accountId);
+  });
+
+  app.delete("/accounts/:accountId", async (req, res) => {
+    await handleAccountDelete(req, res, req.params.accountId);
   });
 
   app.use("/admin", (req, res, next) => {

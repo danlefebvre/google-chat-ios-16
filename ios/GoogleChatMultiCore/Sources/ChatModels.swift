@@ -131,14 +131,20 @@ public struct ChatSender: Codable, Hashable, Sendable {
         self.type = type
     }
 
-    /// Chat API often omits `displayName`; fall back to a short user id fragment.
+    /// Prefer API displayName; never surface raw `users/…` ids in the UI.
     public var resolvedDisplayName: String {
         let trimmed = displayName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         if !trimmed.isEmpty { return trimmed }
-        if let name, let last = name.split(separator: "/").last, !last.isEmpty {
-            return String(last)
-        }
         return "Someone"
+    }
+
+    /// True when `displayName` looks like a bare numeric user id (not a real name).
+    public var hasHumanReadableName: Bool {
+        let trimmed = displayName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !trimmed.isEmpty else { return false }
+        if trimmed.allSatisfy(\.isNumber) { return false }
+        if trimmed.hasPrefix("users/") { return false }
+        return true
     }
 }
 

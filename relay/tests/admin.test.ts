@@ -129,18 +129,57 @@ describe("admin API", () => {
     expect(mismatched.status).toBe(403);
 
     const denied = await request(app)
-      .delete("/accounts/iss%7Csub")
+      .delete("/accounts")
+      .query({ accountId: "iss|sub" })
       .set("Authorization", "Bearer wrong");
     expect(denied.status).toBe(403);
 
     // Refresh token must not authorize teardown — only the relay credential.
     const refreshDenied = await request(app)
-      .delete("/accounts/iss%7Csub")
+      .delete("/accounts")
+      .query({ accountId: "iss|sub" })
       .set("Authorization", "Bearer rt-user");
     expect(refreshDenied.status).toBe(403);
 
     const removed = await request(app)
-      .delete("/accounts/iss%7Csub")
+      .delete("/accounts")
+      .query({ accountId: "iss|sub" })
+      .set("Authorization", `Bearer ${relayCredential}`);
+    expect(removed.status).toBe(204);
+  });
+
+  it("removes accounts whose id contains https:// via query param", async () => {
+    const accountId = "https://accounts.google.com|117792051509045443077";
+    const events = {
+      createSubscription: vi.fn().mockResolvedValue({
+        name: "subscriptions/u1",
+        expireTime: "2026-08-01T00:00:00Z",
+      }),
+      renewSubscription: vi.fn(),
+      deleteSubscription: vi.fn().mockResolvedValue(undefined),
+      revokeToken: vi.fn().mockResolvedValue(undefined),
+    };
+    const app = createApp({
+      store: new InMemoryStore(),
+      ntfy: { baseUrl: "https://ntfy.sh", topic: "t", accessToken: "tk" },
+      adminToken: "admin-secret",
+      eventsClient: events,
+      tokenSecret: "test-token-secret-32chars!!",
+      verifyAccountOwnership: async () => true,
+    });
+
+    const register = await request(app).post("/accounts").send({
+      accountId,
+      email: "a@b.com",
+      label: "Personal",
+      refreshToken: "rt-user",
+    });
+    expect(register.status).toBe(201);
+    const relayCredential = register.body.relayCredential as string;
+
+    const removed = await request(app)
+      .delete("/accounts")
+      .query({ accountId })
       .set("Authorization", `Bearer ${relayCredential}`);
     expect(removed.status).toBe(204);
   });

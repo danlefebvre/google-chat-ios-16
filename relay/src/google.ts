@@ -37,48 +37,73 @@ export function createGoogleEventsClient(
         Date.now() + SUBSCRIPTION_TTL_SECONDS * 1000,
       ).toISOString();
 
-      const response = await fetchImpl(
-        "https://workspaceevents.googleapis.com/v1/subscriptions",
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            "Content-Type": "application/json",
+      // One retry: orphaned Workspace Events subs (e.g. failed teardown) return
+      // 409 ALREADY_EXISTS with the existing subscription name in metadata.
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        const response = await fetchImpl(
+          "https://workspaceevents.googleapis.com/v1/subscriptions",
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              // Chat user-scoped target (all spaces the caller can access).
+              targetResource: "//chat.googleapis.com/spaces/-",
+              eventTypes: ["google.workspace.chat.message.v1.created"],
+              notificationEndpoint: {
+                pubsubTopic: options.pubsubTopic,
+              },
+              payloadOptions: {
+                includeResource: true,
+              },
+              ttl,
+            }),
           },
-          body: JSON.stringify({
-            // Chat user-scoped target (all spaces the caller can access).
-            targetResource: "//chat.googleapis.com/spaces/-",
-            eventTypes: ["google.workspace.chat.message.v1.created"],
-            notificationEndpoint: {
-              pubsubTopic: options.pubsubTopic,
-            },
-            payloadOptions: {
-              includeResource: true,
-            },
-            ttl,
-          }),
-        },
-      );
+        );
 
-      if (!response.ok) {
+        if (response.ok) {
+          const subscription = await resolveSubscriptionOperation(
+            fetchImpl,
+            accessToken,
+            await response.json(),
+          );
+          return {
+            name:
+              subscription.name ??
+              `subscriptions/${sanitizeLabel(input.accountId)}`,
+            expireTime: subscription.expireTime ?? fallbackExpire,
+          };
+        }
+
         const detail = await response.text();
+        if (response.status === 409 && attempt === 0) {
+          const existingName = extractAlreadyExistsSubscriptionName(detail);
+          if (existingName) {
+            const del = await fetchImpl(
+              `https://workspaceevents.googleapis.com/v1/${existingName}`,
+              {
+                method: "DELETE",
+                headers: { Authorization: `Bearer ${accessToken}` },
+              },
+            );
+            if (!del.ok && del.status !== 404) {
+              const delDetail = await del.text();
+              throw new Error(
+                `createSubscription failed (409) and could not delete orphan ${existingName} (${del.status}): ${delDetail}`,
+              );
+            }
+            continue;
+          }
+        }
+
         throw new Error(
           `createSubscription failed (${response.status}): ${detail}`,
         );
       }
 
-      const subscription = await resolveSubscriptionOperation(
-        fetchImpl,
-        accessToken,
-        await response.json(),
-      );
-
-      return {
-        name:
-          subscription.name ??
-          `subscriptions/${sanitizeLabel(input.accountId)}`,
-        expireTime: subscription.expireTime ?? fallbackExpire,
-      };
+      throw new Error("createSubscription failed: exhausted retries");
     },
 
     async renewSubscription(input) {
@@ -396,4 +421,31 @@ async function fetchWithTimeout(
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** Pull `current_subscription` out of a Workspace Events 409 body. */
+export function extractAlreadyExistsSubscriptionName(
+  detail: string,
+): string | null {
+  try {
+    const body = JSON.parse(detail) as {
+      error?: {
+        details?: Array<{
+          metadata?: { current_subscription?: string };
+        }>;
+      };
+    };
+    for (const entry of body.error?.details ?? []) {
+      const name = entry.metadata?.current_subscription;
+      if (typeof name === "string" && name.startsWith("subscriptions/")) {
+        return name;
+      }
+    }
+  } catch {
+    // fall through to regex
+  }
+  const match = detail.match(
+    /"current_subscription"\s*:\s*"(subscriptions\/[^"]+)"/,
+  );
+  return match?.[1] ?? null;
 }

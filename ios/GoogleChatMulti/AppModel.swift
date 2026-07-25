@@ -39,8 +39,9 @@ final class AppModel: ObservableObject {
         accounts = authStore.loadAccounts()
         let tokens = authStore.asTokenProvider()
         let client = ChatAPIClient(tokens: tokens)
+        let people = PeopleClient(tokens: tokens)
         api = client
-        sync = InboxSyncService(api: client, cache: cache)
+        sync = InboxSyncService(api: client, cache: cache, people: people)
         cachedInboxTask?.cancel()
         let syncService = sync
         cachedInboxTask = Task {
@@ -95,24 +96,29 @@ final class AppModel: ObservableObject {
 
     /// Removes the account from the relay first, then local credentials/cache.
     /// Pass `localOnly: true` only for an explicitly labeled local wipe.
+    /// If relay teardown fails, still wipes the device and surfaces a warning.
     func removeAccount(_ accountId: AccountID, localOnly: Bool = false) async {
+        var relayWarning: String?
         if !localOnly {
-            guard let client = RelayAdminClient.shared else {
-                banner = "Relay is not configured. Choose local-only removal to wipe this device."
-                errorMessage = "Relay not configured"
-                return
-            }
-            guard let relayCredential = authStore.relayCredential(for: accountId), !relayCredential.isEmpty else {
-                banner = "Missing relay credential; cannot tear down relay registration."
-                errorMessage = "Missing relay credential"
-                return
-            }
-            do {
-                try await client.removeAccount(accountId, relayCredential: relayCredential)
-            } catch {
-                banner = "Relay teardown failed; local account kept. Retry remove later."
-                errorMessage = error.localizedDescription
-                return
+            if let client = RelayAdminClient.shared,
+               let relayCredential = authStore.relayCredential(for: accountId),
+               !relayCredential.isEmpty
+            {
+                do {
+                    try await client.removeAccount(accountId, relayCredential: relayCredential)
+                } catch {
+                    AppLog.relay.error(
+                        "teardown failed, continuing local wipe: \(error.localizedDescription, privacy: .public)"
+                    )
+                    relayWarning =
+                        "Removed from this device; relay teardown failed — notifications may continue until the relay account is cleaned up."
+                    errorMessage = error.localizedDescription
+                }
+            } else if RelayAdminClient.shared == nil {
+                relayWarning = "Removed from this device; relay is not configured."
+            } else {
+                relayWarning =
+                    "Removed from this device; missing relay credential so server-side teardown was skipped."
             }
         }
 
@@ -125,6 +131,9 @@ final class AppModel: ObservableObject {
         }
         accounts = authStore.loadAccounts()
         conversations = conversations.filter { $0.accountId != accountId }
+        if let relayWarning {
+            banner = relayWarning
+        }
     }
 
     func open(_ conversation: ConversationSummary) {

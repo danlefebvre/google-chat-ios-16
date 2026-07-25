@@ -8,6 +8,7 @@ struct ThreadView: View {
 
     @State private var messages: [ChatMessage] = []
     @State private var memberNames: [String: String] = [:]
+    @State private var selfUserName: String?
     @State private var draft = ""
     @State private var isSending = false
     @State private var loadError: String?
@@ -26,11 +27,12 @@ struct ThreadView: View {
             }
             ScrollViewReader { proxy in
                 ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 10) {
+                    LazyVStack(spacing: 10) {
                         ForEach(messages.reversed()) { message in
                             MessageBubble(
                                 message: message,
                                 senderLabel: senderLabel(for: message),
+                                isFromSelf: isFromSelf(message),
                                 accountId: conversation?.accountId,
                                 tokenProvider: model.authStore.asTokenProvider(),
                                 onReact: { unicode in
@@ -85,25 +87,50 @@ struct ThreadView: View {
         guard let conversation,
               let api = await apiClient()
         else { return }
+        let people = PeopleClient(tokens: model.authStore.asTokenProvider())
+        let me = conversation.accountId.chatUserName
+        selfUserName = me
+        memberNames[me] = "You"
+
         do {
+            var map = memberNames
+            var candidateUserNames = Set<String>([me])
+
             if let members = try? await api.listMembers(
                 accountId: conversation.accountId,
                 spaceName: conversation.spaceName,
                 showInvited: true
             ) {
-                var map: [String: String] = [:]
                 for membership in members.memberships {
                     guard let member = membership.member, let name = member.name else { continue }
-                    let label = member.resolvedDisplayName
-                    if label != "Someone" { map[name] = label }
+                    candidateUserNames.insert(name)
+                    if member.hasHumanReadableName,
+                       let label = member.displayName?.trimmingCharacters(in: .whitespacesAndNewlines)
+                    {
+                        map[name] = label
+                    }
                 }
-                memberNames = map
             }
+
             let response = try await api.listMessages(
                 accountId: conversation.accountId,
                 spaceName: conversation.spaceName,
                 pageSize: 40
             )
+            candidateUserNames.formUnion(response.messages.compactMap(\.sender?.name))
+
+            // Chat user-auth responses often omit displayName — fill via People API.
+            let unresolved = Array(candidateUserNames.filter { map[$0] == nil && $0 != me })
+            if let resolved = try? await people.displayNames(
+                accountId: conversation.accountId,
+                chatUserNames: unresolved
+            ) {
+                for (key, value) in resolved where key != me {
+                    map[key] = value
+                }
+            }
+            map[me] = "You"
+            memberNames = map
             messages = response.messages
             try? await api.markSpaceRead(
                 accountId: conversation.accountId,
@@ -114,11 +141,22 @@ struct ThreadView: View {
         }
     }
 
+    private func isFromSelf(_ message: ChatMessage) -> Bool {
+        guard let sender = message.sender?.name else { return false }
+        if let selfUserName, sender == selfUserName { return true }
+        if let me = conversation?.accountId.chatUserName, sender == me { return true }
+        return false
+    }
+
     private func senderLabel(for message: ChatMessage) -> String {
+        if isFromSelf(message) { return "You" }
         if let name = message.sender?.name, let mapped = memberNames[name], !mapped.isEmpty {
             return mapped
         }
-        return message.sender?.resolvedDisplayName ?? "Someone"
+        if let sender = message.sender, sender.hasHumanReadableName {
+            return sender.resolvedDisplayName
+        }
+        return "Someone"
     }
 
     private func send() async {
@@ -132,6 +170,10 @@ struct ThreadView: View {
                 spaceName: conversation.spaceName,
                 text: text
             )
+            if let senderName = message.sender?.name {
+                selfUserName = senderName
+                memberNames[senderName] = "You"
+            }
             messages.insert(message, at: 0)
             draft = ""
         } catch {
@@ -201,6 +243,7 @@ enum ChatQuickReactions {
 struct MessageBubble: View {
     let message: ChatMessage
     let senderLabel: String
+    let isFromSelf: Bool
     let accountId: AccountID?
     let tokenProvider: (any TokenProviding)?
     let onReact: (String) async -> Void
@@ -215,77 +258,84 @@ struct MessageBubble: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(senderLabel)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(Color("SecondaryText"))
+        HStack {
+            if isFromSelf { Spacer(minLength: 48) }
 
-            VStack(alignment: .leading, spacing: 8) {
-                if let textBody {
-                    Text(textBody)
-                        .font(.body)
-                } else if attachments.isEmpty {
-                    Text("(empty message)")
-                        .font(.body)
-                        .foregroundStyle(.secondary)
+            VStack(alignment: isFromSelf ? .trailing : .leading, spacing: 4) {
+                Text(senderLabel)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(Color("SecondaryText"))
+
+                VStack(alignment: .leading, spacing: 8) {
+                    if let textBody {
+                        Text(textBody)
+                            .font(.body)
+                            .foregroundStyle(isFromSelf ? Color.white : Color("PrimaryText"))
+                    } else if attachments.isEmpty {
+                        Text("(empty message)")
+                            .font(.body)
+                            .foregroundStyle(isFromSelf ? Color.white.opacity(0.85) : .secondary)
+                    }
+
+                    ForEach(Array(attachments.enumerated()), id: \.offset) { _, attachment in
+                        if attachment.isImage,
+                           let accountId,
+                           let tokenProvider,
+                           attachment.mediaResourceName != nil
+                        {
+                            AttachmentImageView(
+                                attachment: attachment,
+                                accountId: accountId,
+                                tokenProvider: tokenProvider
+                            )
+                        } else {
+                            Label(
+                                attachment.contentName ?? "Attachment",
+                                systemImage: attachment.isImage ? "photo" : "paperclip"
+                            )
+                            .font(.caption)
+                            .foregroundStyle(isFromSelf ? Color.white.opacity(0.9) : Color("SecondaryText"))
+                        }
+                    }
+                }
+                .padding(10)
+                .background(isFromSelf ? Color.accentColor : Color("BubbleFill"))
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+
+                if let reactions = message.emojiReactionSummaries, !reactions.isEmpty {
+                    HStack(spacing: 6) {
+                        ForEach(Array(reactions.enumerated()), id: \.offset) { _, reaction in
+                            let emoji = reaction.emoji?.unicode ?? ""
+                            Button {
+                                guard !emoji.isEmpty else { return }
+                                Task { await onReact(emoji) }
+                            } label: {
+                                Text("\(emoji) \(reaction.reactionCount ?? 0)")
+                                    .font(.caption2)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background(Color("ChipFill"))
+                                    .clipShape(Capsule())
+                            }
+                            .buttonStyle(.borderless)
+                        }
+                    }
                 }
 
-                ForEach(Array(attachments.enumerated()), id: \.offset) { _, attachment in
-                    if attachment.isImage,
-                       let accountId,
-                       let tokenProvider,
-                       attachment.mediaResourceName != nil
-                    {
-                        AttachmentImageView(
-                            attachment: attachment,
-                            accountId: accountId,
-                            tokenProvider: tokenProvider
-                        )
-                    } else {
-                        Label(
-                            attachment.contentName ?? "Attachment",
-                            systemImage: attachment.isImage ? "photo" : "paperclip"
-                        )
+                Menu {
+                    ForEach(ChatQuickReactions.all, id: \.self) { emoji in
+                        Button(emoji) {
+                            Task { await onReact(emoji) }
+                        }
+                    }
+                } label: {
+                    Label("React", systemImage: "face.smiling")
                         .font(.caption)
                         .foregroundStyle(Color("SecondaryText"))
-                    }
-                }
-            }
-            .padding(10)
-            .background(Color("BubbleFill"))
-            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-
-            if let reactions = message.emojiReactionSummaries, !reactions.isEmpty {
-                HStack(spacing: 6) {
-                    ForEach(Array(reactions.enumerated()), id: \.offset) { _, reaction in
-                        let emoji = reaction.emoji?.unicode ?? ""
-                        Button {
-                            guard !emoji.isEmpty else { return }
-                            Task { await onReact(emoji) }
-                        } label: {
-                            Text("\(emoji) \(reaction.reactionCount ?? 0)")
-                                .font(.caption2)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 4)
-                                .background(Color("ChipFill"))
-                                .clipShape(Capsule())
-                        }
-                        .buttonStyle(.borderless)
-                    }
                 }
             }
 
-            Menu {
-                ForEach(ChatQuickReactions.all, id: \.self) { emoji in
-                    Button(emoji) {
-                        Task { await onReact(emoji) }
-                    }
-                }
-            } label: {
-                Label("React", systemImage: "face.smiling")
-                    .font(.caption)
-                    .foregroundStyle(Color("SecondaryText"))
-            }
+            if !isFromSelf { Spacer(minLength: 48) }
         }
     }
 }

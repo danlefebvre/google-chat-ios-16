@@ -81,9 +81,16 @@ actor RelayAdminClient {
     }
 
     func removeAccount(_ accountId: AccountID, relayCredential: String) async throws {
-        let encoded = accountId.rawValue.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed)
-            ?? accountId.rawValue
-        let url = try endpoint("accounts/\(encoded)")
+        // Account ids contain `https://…|sub`. Putting that in the path breaks on `/`
+        // (and some proxies reject `%2F`). Use a query param instead.
+        guard var components = URLComponents(url: try endpoint("accounts"), resolvingAgainstBaseURL: false)
+        else {
+            throw RelayClientError.requestFailed(status: -1, body: "invalid relay accounts URL")
+        }
+        components.queryItems = [URLQueryItem(name: "accountId", value: accountId.rawValue)]
+        guard let url = components.url else {
+            throw RelayClientError.requestFailed(status: -1, body: "invalid relay teardown URL")
+        }
         AppLog.relay.info("DELETE \(url.absoluteString, privacy: .public)")
         var request = URLRequest(url: url)
         request.httpMethod = "DELETE"

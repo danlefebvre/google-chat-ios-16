@@ -14,6 +14,12 @@ public struct AccountID: Hashable, Codable, Sendable, RawRepresentable {
         "\(issuer)|\(subject)"
     }
 
+    /// Chat API user resource for this Google account (`users/{sub}`).
+    /// Chat user ids match People API / OpenID `sub` for the same account.
+    public var chatUserName: String {
+        "users/\(subject)"
+    }
+
     public init?(rawValue: String) {
         let parts = rawValue.split(separator: "|", maxSplits: 1, omittingEmptySubsequences: false)
         guard parts.count == 2, !parts[0].isEmpty, !parts[1].isEmpty else {
