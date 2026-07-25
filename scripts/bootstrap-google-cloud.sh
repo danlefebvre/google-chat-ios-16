@@ -28,6 +28,13 @@ if ! gcloud pubsub topics describe "${TOPIC}" \
     --project="${PROJECT_ID}" --quiet
 fi
 
+# Workspace Events / Chat must be allowed to publish into the topic.
+gcloud pubsub topics add-iam-policy-binding "${TOPIC}" \
+  --project="${PROJECT_ID}" \
+  --member='serviceAccount:chat-api-push@system.gserviceaccount.com' \
+  --role='roles/pubsub.publisher' \
+  --quiet >/dev/null
+
 echo
 echo "Next manual steps in Google Cloud Console:"
 echo "  1. OAuth consent screen → Testing; add personal + work accounts as test users."

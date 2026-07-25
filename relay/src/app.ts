@@ -169,7 +169,8 @@ export function createApp(options: CreateAppOptions): Express {
       });
     } catch (err) {
       console.error("register account failed", err);
-      res.status(500).json({ error: "register_failed" });
+      const detail = err instanceof Error ? err.message : String(err);
+      res.status(500).json({ error: "register_failed", detail });
     }
   });
 
