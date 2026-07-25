@@ -534,6 +534,7 @@ struct MessageBubble: View {
                     Image(systemName: "face.smiling")
                         .font(.title2)
                         .foregroundStyle(Color("SecondaryText"))
+                        .accessibilityLabel("React")
                 }
             }
 
