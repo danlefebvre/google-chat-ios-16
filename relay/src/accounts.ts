@@ -5,6 +5,18 @@ import type { AccountRecord, EventsClient, TokenCrypto } from "./types.js";
 /** Max length for account display labels (push titles + inbox badges). */
 export const MAX_ACCOUNT_LABEL_LENGTH = 32;
 
+/** Trim and validate an account label; throws `empty_label` / `label_too_long`. */
+export function normalizeAccountLabel(label: string): string {
+  const trimmed = label.trim();
+  if (!trimmed) {
+    throw new Error("empty_label");
+  }
+  if (trimmed.length > MAX_ACCOUNT_LABEL_LENGTH) {
+    throw new Error("label_too_long");
+  }
+  return trimmed;
+}
+
 export type RegisterAccountInput = {
   accountId: string;
   email: string;
@@ -36,6 +48,8 @@ export class AccountService {
   async registerAccount(
     input: RegisterAccountInput,
   ): Promise<RegisterAccountResult> {
+    // Validate before any subscription side effects.
+    const label = normalizeAccountLabel(input.label);
     const existing = this.store.getAccount(input.accountId);
     if (existing?.subscriptionName) {
       // Re-register must not orphan the previous Google subscription.
@@ -59,7 +73,7 @@ export class AccountService {
     const account: AccountRecord = {
       accountId: input.accountId,
       email: input.email,
-      label: input.label,
+      label,
       encryptedRefreshToken: this.crypto.encrypt(input.refreshToken),
       encryptedRelayCredential: this.crypto.encrypt(relayCredential),
       subscriptionName: subscription.name,
@@ -170,14 +184,8 @@ export class AccountService {
     if (!existing) {
       throw new Error(`unknown account: ${accountId}`);
     }
-    const trimmed = label.trim();
-    if (!trimmed) {
-      throw new Error("empty_label");
-    }
-    if (trimmed.length > MAX_ACCOUNT_LABEL_LENGTH) {
-      throw new Error("label_too_long");
-    }
-    const updated = { ...existing, label: trimmed };
+    const normalized = normalizeAccountLabel(label);
+    const updated = { ...existing, label: normalized };
     this.store.upsertAccount(updated);
     return updated;
   }

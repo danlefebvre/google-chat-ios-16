@@ -169,9 +169,13 @@ export function createApp(options: CreateAppOptions): Express {
         relayCredential,
       });
     } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      if (message === "empty_label" || message === "label_too_long") {
+        res.status(400).json({ error: message });
+        return;
+      }
       console.error("register account failed", err);
-      const detail = err instanceof Error ? err.message : String(err);
-      res.status(500).json({ error: "register_failed", detail });
+      res.status(500).json({ error: "register_failed", detail: message });
     }
   });
 
@@ -374,6 +378,11 @@ export function createApp(options: CreateAppOptions): Express {
         relayCredential,
       });
     } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      if (message === "empty_label" || message === "label_too_long") {
+        res.status(400).json({ error: message });
+        return;
+      }
       console.error("register account failed", err);
       res.status(500).json({ error: "register_failed" });
     }
