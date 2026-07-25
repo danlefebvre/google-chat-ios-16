@@ -194,6 +194,11 @@ final class AppModel: ObservableObject {
             return copy
         }
         applyConversations(updatedRows)
+        if var selected = selectedConversation, selected.accountId == accountId {
+            selected.accountLabel = trimmedLabel
+            selected.accountColorHex = colorHex
+            selectedConversation = selected
+        }
         do {
             try await cache.replaceConversations(updatedRows)
         } catch {
