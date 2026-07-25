@@ -95,6 +95,35 @@ final class ChatAPIClientTests: XCTestCase {
         _ = try await client.listMessages(accountId: account, spaceName: "spaces/AAA", pageSize: 1)
     }
 
+    func testListMessagesIncludesPageTokenQueryItem() async throws {
+        let account = AccountID(issuer: "https://accounts.google.com", subject: "work")
+        URLProtocolStub.handler = { request in
+            let items = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?.queryItems ?? []
+            XCTAssertEqual(items.first(where: { $0.name == "pageToken" })?.value, "page-2")
+            XCTAssertEqual(items.first(where: { $0.name == "pageSize" })?.value, "40")
+            XCTAssertEqual(items.first(where: { $0.name == "orderBy" })?.value, "createTime desc")
+            let json = #"{"messages":[],"nextPageToken":"page-3"}"#.data(using: .utf8)!
+            return (
+                HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
+                json
+            )
+        }
+
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [URLProtocolStub.self]
+        let client = ChatAPIClient(
+            tokens: StubTokens(["\(account.rawValue)": "tok"]),
+            session: URLSession(configuration: config)
+        )
+        let response = try await client.listMessages(
+            accountId: account,
+            spaceName: "spaces/AAA",
+            pageSize: 40,
+            pageToken: "page-2"
+        )
+        XCTAssertEqual(response.nextPageToken, "page-3")
+    }
+
     func testListSpacesRetriesOnceAfter401WithRefreshedToken() async throws {
         let account = AccountID(issuer: "https://accounts.google.com", subject: "work")
         let tokens = StubTokens(

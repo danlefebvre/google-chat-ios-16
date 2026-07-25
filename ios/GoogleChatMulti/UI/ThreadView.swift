@@ -13,9 +13,19 @@ struct ThreadView: View {
     @State private var isSending = false
     @State private var loadError: String?
     @State private var pickerItem: PhotosPickerItem?
+    @State private var nextPageToken: String?
+    @State private var isLoadingOlder = false
+    /// Scroll to the newest bubble after initial load / send.
+    @State private var scrollToNewestRequested = false
+    /// Keep the previously oldest bubble in place after prepending an older page.
+    @State private var preserveScrollMessageId: String?
 
     private var conversation: ConversationSummary? {
         model.conversations.first { $0.compositeId == compositeId }
+    }
+
+    private var hasMoreOlder: Bool {
+        MessageHistoryPager.hasMorePages(nextPageToken: nextPageToken)
     }
 
     var body: some View {
@@ -28,6 +38,19 @@ struct ThreadView: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(spacing: 10) {
+                        if hasMoreOlder || isLoadingOlder {
+                            HStack {
+                                Spacer()
+                                ProgressView()
+                                    .opacity(isLoadingOlder ? 1 : 0)
+                                Spacer()
+                            }
+                            .frame(height: 36)
+                            .onAppear {
+                                Task { await loadOlderMessages() }
+                            }
+                        }
+
                         ForEach(messages.reversed()) { message in
                             MessageBubble(
                                 message: message,
@@ -45,10 +68,14 @@ struct ThreadView: View {
                     .padding(16)
                 }
                 .onChange(of: messages.count) { _ in
-                    if let newest = messages.reversed().last?.id {
+                    if scrollToNewestRequested, let newest = messages.first?.id {
                         withAnimation(.easeOut(duration: 0.2)) {
                             proxy.scrollTo(newest, anchor: .bottom)
                         }
+                        scrollToNewestRequested = false
+                    } else if let preserveScrollMessageId {
+                        proxy.scrollTo(preserveScrollMessageId, anchor: .top)
+                        self.preserveScrollMessageId = nil
                     }
                 }
             }
@@ -85,7 +112,7 @@ struct ThreadView: View {
         .background(Color("CanvasBackground").ignoresSafeArea())
     }
 
-    private func load() async {
+    private func load(scrollToNewest: Bool = true) async {
         guard let conversation,
               let api = await apiClient()
         else { return }
@@ -93,6 +120,10 @@ struct ThreadView: View {
         let me = conversation.accountId.chatUserName
         selfUserName = me
         memberNames[me] = "You"
+        isLoadingOlder = false
+        nextPageToken = nil
+        scrollToNewestRequested = false
+        preserveScrollMessageId = nil
 
         do {
             var map = memberNames
@@ -133,6 +164,8 @@ struct ThreadView: View {
             }
             map[me] = "You"
             memberNames = map
+            nextPageToken = response.nextPageToken
+            scrollToNewestRequested = scrollToNewest && !response.messages.isEmpty
             messages = response.messages
             do {
                 try await api.markSpaceRead(
@@ -145,6 +178,55 @@ struct ThreadView: View {
             }
         } catch {
             loadError = error.localizedDescription
+        }
+    }
+
+    private func loadOlderMessages() async {
+        guard !isLoadingOlder,
+              let pageToken = nextPageToken,
+              MessageHistoryPager.hasMorePages(nextPageToken: pageToken),
+              let conversation,
+              let api = await apiClient()
+        else { return }
+
+        isLoadingOlder = true
+        // Newest-first storage: last element is the oldest currently loaded bubble.
+        let anchorId = messages.last?.id
+        defer { isLoadingOlder = false }
+
+        do {
+            let response = try await api.listMessages(
+                accountId: conversation.accountId,
+                spaceName: conversation.spaceName,
+                pageSize: 40,
+                pageToken: pageToken
+            )
+            await resolveSenderNames(for: response.messages, accountId: conversation.accountId)
+
+            let previousCount = messages.count
+            let merged = MessageHistoryPager.mergingOlderPage(messages, olderPage: response.messages)
+            nextPageToken = response.nextPageToken
+            if merged.count > previousCount, let anchorId {
+                preserveScrollMessageId = anchorId
+            }
+            messages = merged
+        } catch {
+            // Keep the current page token so scrolling up can retry.
+            model.banner = "Couldn’t load older messages."
+        }
+    }
+
+    private func resolveSenderNames(for page: [ChatMessage], accountId: AccountID) async {
+        let me = accountId.chatUserName
+        let unresolved = page.compactMap(\.sender?.name).filter { memberNames[$0] == nil && $0 != me }
+        guard !unresolved.isEmpty else { return }
+        let people = PeopleClient(tokens: model.authStore.asTokenProvider())
+        guard let resolved = try? await people.displayNames(
+            accountId: accountId,
+            chatUserNames: unresolved
+        ) else { return }
+        for (key, value) in resolved where key != me {
+            memberNames[key] = value
         }
     }
 
@@ -181,6 +263,7 @@ struct ThreadView: View {
                 selfUserName = senderName
                 memberNames[senderName] = "You"
             }
+            scrollToNewestRequested = true
             messages.insert(message, at: 0)
             draft = ""
         } catch {
@@ -196,7 +279,7 @@ struct ThreadView: View {
                 messageName: message.name,
                 unicode: unicode
             )
-            await load()
+            await load(scrollToNewest: false)
         } catch {
             model.banner = "Reaction failed."
         }
@@ -230,6 +313,7 @@ struct ThreadView: View {
                 text: caption.isEmpty ? "📷" : caption,
                 attachmentUploadTokens: [token]
             )
+            scrollToNewestRequested = true
             messages.insert(message, at: 0)
             draft = ""
         } catch {
