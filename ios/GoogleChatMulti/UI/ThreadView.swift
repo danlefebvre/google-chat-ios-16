@@ -531,9 +531,10 @@ struct MessageBubble: View {
                         }
                     }
                 } label: {
-                    Label("React", systemImage: "face.smiling")
-                        .font(.caption)
+                    Image(systemName: "face.smiling")
+                        .font(.title2)
                         .foregroundStyle(Color("SecondaryText"))
+                        .accessibilityLabel("React")
                 }
             }
 
