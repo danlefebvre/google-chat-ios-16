@@ -28,6 +28,7 @@ actor RelayAdminClient {
 
     static func configure(baseURL: URL) {
         shared = RelayAdminClient(baseURL: baseURL)
+        AppLog.relay.debug("RelayAdminClient.shared set")
     }
 
     /// Registers the account and returns the opaque relay credential to store locally.
@@ -36,9 +37,13 @@ actor RelayAdminClient {
         refreshToken: String
     ) async throws -> String {
         let url = try endpoint("accounts")
+        AppLog.relay.info(
+            "POST \(url.absoluteString, privacy: .public) accountId=\(account.id.rawValue, privacy: .public) email=\(account.email, privacy: .public) label=\(account.label, privacy: .public)"
+        )
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        // refreshToken is sent to the relay but never logged.
         let body: [String: String] = [
             "accountId": account.id.rawValue,
             "email": account.email,
@@ -48,33 +53,49 @@ actor RelayAdminClient {
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
         let (data, response) = try await session.data(for: request)
         let status = (response as? HTTPURLResponse)?.statusCode ?? -1
+        let responseBody = String(data: data, encoding: .utf8) ?? ""
         guard (200..<300).contains(status) else {
-            let body = String(data: data, encoding: .utf8) ?? ""
-            throw RelayClientError.requestFailed(status: status, body: body)
+            AppLog.relay.error(
+                "register failed status=\(status) body=\(responseBody, privacy: .public)"
+            )
+            throw RelayClientError.requestFailed(status: status, body: responseBody)
         }
         guard
             let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
             let credential = json["relayCredential"] as? String,
             !credential.isEmpty
         else {
-            let body = String(data: data, encoding: .utf8) ?? ""
-            throw RelayClientError.requestFailed(status: status, body: "missing relayCredential: \(body)")
+            AppLog.relay.error(
+                "register missing relayCredential status=\(status) body=\(responseBody, privacy: .public)"
+            )
+            throw RelayClientError.requestFailed(
+                status: status,
+                body: "missing relayCredential: \(responseBody)"
+            )
         }
+        let subscription = json["subscriptionName"] as? String ?? "(none)"
+        AppLog.relay.info(
+            "register ok subscription=\(subscription, privacy: .public) credentialBytes=\(credential.count)"
+        )
         return credential
     }
 
     func removeAccount(_ accountId: AccountID, relayCredential: String) async throws {
         let encoded = accountId.rawValue.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed)
             ?? accountId.rawValue
-        var request = URLRequest(url: try endpoint("accounts/\(encoded)"))
+        let url = try endpoint("accounts/\(encoded)")
+        AppLog.relay.info("DELETE \(url.absoluteString, privacy: .public)")
+        var request = URLRequest(url: url)
         request.httpMethod = "DELETE"
         request.setValue("Bearer \(relayCredential)", forHTTPHeaderField: "Authorization")
         let (data, response) = try await session.data(for: request)
         let status = (response as? HTTPURLResponse)?.statusCode ?? -1
         guard status == 204 else {
             let body = String(data: data, encoding: .utf8) ?? ""
+            AppLog.relay.error("teardown failed status=\(status) body=\(body, privacy: .public)")
             throw RelayClientError.requestFailed(status: status, body: body)
         }
+        AppLog.relay.info("teardown ok accountId=\(accountId.rawValue, privacy: .public)")
     }
 
     private func endpoint(_ path: String) throws -> URL {

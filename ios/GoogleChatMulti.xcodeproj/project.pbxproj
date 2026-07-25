@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 56;
+	objectVersion = 60;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -18,10 +18,11 @@
 		A10000000000000000000009 /* ThreadView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000009 /* ThreadView.swift */; };
 		A1000000000000000000000A /* AccountManagerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000000A /* AccountManagerView.swift */; };
 		A1000000000000000000000B /* AttachmentMemory.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000000B /* AttachmentMemory.swift */; };
-		A1000000000000000000000E /* AppBootstrap.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000000F /* AppBootstrap.swift */; };
 		A1000000000000000000000C /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000000C /* Assets.xcassets */; };
 		A1000000000000000000000D /* GoogleChatMultiCore in Frameworks */ = {isa = PBXBuildFile; productRef = A30000000000000000000001 /* GoogleChatMultiCore */; };
+		A1000000000000000000000E /* AppBootstrap.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000000F /* AppBootstrap.swift */; };
 		A10000000000000000000010 /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = A30000000000000000000002 /* GoogleSignIn */; };
+		A10000000000000000000011 /* Logging.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000010 /* Logging.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -36,10 +37,11 @@
 		A20000000000000000000009 /* ThreadView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThreadView.swift; sourceTree = "<group>"; };
 		A2000000000000000000000A /* AccountManagerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountManagerView.swift; sourceTree = "<group>"; };
 		A2000000000000000000000B /* AttachmentMemory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttachmentMemory.swift; sourceTree = "<group>"; };
-		A2000000000000000000000F /* AppBootstrap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppBootstrap.swift; sourceTree = "<group>"; };
 		A2000000000000000000000C /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		A2000000000000000000000D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A2000000000000000000000E /* GoogleChatMulti.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = GoogleChatMulti.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A2000000000000000000000F /* AppBootstrap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppBootstrap.swift; sourceTree = "<group>"; };
+		A20000000000000000000010 /* Logging.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Logging.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -68,6 +70,7 @@
 			children = (
 				A20000000000000000000001 /* GoogleChatMultiApp.swift */,
 				A2000000000000000000000F /* AppBootstrap.swift */,
+				A20000000000000000000010 /* Logging.swift */,
 				A20000000000000000000002 /* AppModel.swift */,
 				A2000000000000000000000C /* Assets.xcassets */,
 				A2000000000000000000000D /* Info.plist */,
@@ -211,6 +214,7 @@
 			files = (
 				A10000000000000000000001 /* GoogleChatMultiApp.swift in Sources */,
 				A1000000000000000000000E /* AppBootstrap.swift in Sources */,
+				A10000000000000000000011 /* Logging.swift in Sources */,
 				A10000000000000000000002 /* AppModel.swift in Sources */,
 				A10000000000000000000003 /* AccountAuthStore.swift in Sources */,
 				A10000000000000000000004 /* GoogleSignInCoordinator.swift in Sources */,
@@ -266,7 +270,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = AM4CX95H2B;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = GoogleChatMulti/Info.plist;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -295,7 +299,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = AM4CX95H2B;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = GoogleChatMulti/Info.plist;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;

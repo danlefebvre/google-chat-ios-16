@@ -99,6 +99,7 @@ struct AccountManagerView: View {
 
     private func registerWithRelay(_ account: LinkedAccount, refreshToken: String) async {
         guard let client = RelayAdminClient.shared else {
+            AppLog.relay.error("registerWithRelay: RelayAdminClient.shared is nil")
             model.markRelayRegistration(pending: true, for: account.id)
             model.banner = "Account saved locally; relay not configured (notifications unavailable)."
             return
@@ -107,14 +108,20 @@ struct AccountManagerView: View {
             let credential = try await client.registerAccount(account: account, refreshToken: refreshToken)
             model.authStore.saveRelayCredential(credential, for: account.id)
             model.markRelayRegistration(pending: false, for: account.id)
+            AppLog.relay.info("relay credential saved for \(account.id.rawValue, privacy: .public)")
         } catch {
+            AppLog.relay.error(
+                "registerWithRelay failed: \(error.localizedDescription, privacy: .public)"
+            )
             model.markRelayRegistration(pending: true, for: account.id)
             model.banner = "Relay registration failed: \(error.localizedDescription). Retry from Accounts."
         }
     }
 
     private func retryRelayRegistration(_ account: LinkedAccount) async {
+        AppLog.relay.info("retry relay registration for \(account.id.rawValue, privacy: .public)")
         guard let refresh = model.authStore.refreshToken(for: account.id), !refresh.isEmpty else {
+            AppLog.relay.error("retry failed: missing refresh token")
             model.banner = "Missing refresh token for relay registration."
             return
         }

@@ -65,6 +65,7 @@ final class AppModel: ObservableObject {
         do {
             conversations = try await sync.refreshAccounts(accounts)
         } catch {
+            AppLog.inbox.error("refresh failed: \(error.localizedDescription, privacy: .public)")
             errorMessage = error.localizedDescription
             // Foreground fallback banner when sync/relay path is unhealthy.
             banner = "Could not refresh chats. Showing cached threads."

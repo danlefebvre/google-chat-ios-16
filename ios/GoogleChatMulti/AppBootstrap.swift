@@ -7,6 +7,7 @@ enum AppBootstrap {
         guard
             let base = Bundle.main.object(forInfoDictionaryKey: "RELAY_BASE_URL") as? String
         else {
+            AppLog.relay.error("RELAY_BASE_URL missing from Info.plist")
             assertionFailure("RELAY_BASE_URL missing from Info.plist")
             return
         }
@@ -17,9 +18,11 @@ enum AppBootstrap {
             !trimmed.contains("YOUR_RELAY_HOST"),
             url.scheme == "https" || url.scheme == "http"
         else {
+            AppLog.relay.error("RELAY_BASE_URL is invalid: \(base, privacy: .public)")
             assertionFailure("RELAY_BASE_URL is invalid: \(base)")
             return
         }
         RelayAdminClient.configure(baseURL: url)
+        AppLog.relay.info("Relay configured → \(url.absoluteString, privacy: .public)")
     }
 }
