@@ -523,19 +523,6 @@ struct MessageBubble: View {
                         }
                     }
                 }
-
-                Menu {
-                    ForEach(ChatQuickReactions.all, id: \.self) { emoji in
-                        Button(emoji) {
-                            Task { await onReact(emoji) }
-                        }
-                    }
-                } label: {
-                    Image(systemName: "face.smiling")
-                        .font(.title2)
-                        .foregroundStyle(Color("SecondaryText"))
-                        .accessibilityLabel("React")
-                }
             }
 
             if !isFromSelf { Spacer(minLength: 48) }
