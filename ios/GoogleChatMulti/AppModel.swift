@@ -214,20 +214,48 @@ final class AppModel: ObservableObject {
 
     private func syncLabelToRelay(accountId: AccountID, label: String) async {
         guard let client = RelayAdminClient.shared else { return }
-        guard let credential = authStore.relayCredential(for: accountId), !credential.isEmpty else {
-            // Local-only or pending registration — next successful register sends the new label.
+
+        if let credential = authStore.relayCredential(for: accountId), !credential.isEmpty {
+            do {
+                try await client.updateAccountLabel(
+                    accountId,
+                    label: label,
+                    relayCredential: credential
+                )
+                return
+            } catch {
+                // Common after a wiped relay store: local credential no longer matches.
+                AppLog.relay.error(
+                    "label PATCH failed, trying re-register: \(error.localizedDescription, privacy: .public)"
+                )
+            }
+        }
+
+        // Re-register upserts the account with the current label (and a fresh credential).
+        guard
+            let account = accounts.first(where: { $0.id == accountId }),
+            let refresh = authStore.refreshToken(for: accountId),
+            !refresh.isEmpty
+        else {
+            banner =
+                "Saved on this device; push label sync failed — notifications may still use the old name."
             return
         }
         do {
-            try await client.updateAccountLabel(
-                accountId,
-                label: label,
-                relayCredential: credential
+            let credential = try await client.registerAccount(
+                account: account,
+                refreshToken: refresh
+            )
+            authStore.saveRelayCredential(credential, for: accountId)
+            markRelayRegistration(pending: false, for: accountId)
+            AppLog.relay.info(
+                "label sync recovered via re-register accountId=\(accountId.rawValue, privacy: .public)"
             )
         } catch {
             AppLog.relay.error(
-                "label sync failed: \(error.localizedDescription, privacy: .public)"
+                "label sync re-register failed: \(error.localizedDescription, privacy: .public)"
             )
+            markRelayRegistration(pending: true, for: accountId)
             banner =
                 "Saved on this device; push label sync failed — notifications may still use the old name."
         }
