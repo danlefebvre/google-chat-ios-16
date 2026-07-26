@@ -70,13 +70,7 @@ struct AccountManagerView: View {
                             .font(.caption)
                         }
                     }
-                    .swipeActions {
-                        Button {
-                            editingAccount = account
-                        } label: {
-                            Label("Edit", systemImage: "pencil")
-                        }
-                        .tint(.blue)
+                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                         Button(role: .destructive) {
                             Task { await model.removeAccount(account.id) }
                         } label: {
