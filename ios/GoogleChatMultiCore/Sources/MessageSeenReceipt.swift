@@ -8,6 +8,9 @@ import Foundation
 /// inferred from the peer’s latest reply.
 public enum MessageSeenReceipt {
     /// Name of the newest self-authored message at or before `peerLastReadTime`.
+    ///
+    /// Returns `nil` when a later peer message exists — a reply already proves
+    /// the outbound message was seen, so the receipt would be redundant.
     public static func lastSeenSelfMessageName(
         in messages: [ChatMessage],
         selfUserName: String,
@@ -27,7 +30,15 @@ public enum MessageSeenReceipt {
             bestTime = created
             bestName = message.name
         }
-        return bestName
+        guard let bestName, let bestTime else { return nil }
+
+        let peerRepliedAfter = messages.contains { message in
+            guard let sender = message.sender?.name, sender != selfName,
+                  let created = message.createTime
+            else { return false }
+            return created > bestTime
+        }
+        return peerRepliedAfter ? nil : bestName
     }
 
     /// Lower-bound peer read time from their newest message in `messages`.

@@ -85,7 +85,7 @@ final class MessageSeenReceiptTests: XCTestCase {
         XCTAssertNil(MessageSeenReceipt.inferredPeerLastReadTime(in: messages, selfUserName: me))
     }
 
-    func testEndToEndReplyHeuristicMarksOnlyLastSeenSelfMessage() {
+    func testEndToEndReplyHeuristicHidesSeenWhenPeerReplied() {
         let t1 = Date(timeIntervalSince1970: 1_000)
         let t2 = Date(timeIntervalSince1970: 2_000)
         let t3 = Date(timeIntervalSince1970: 3_000)
@@ -104,6 +104,39 @@ final class MessageSeenReceiptTests: XCTestCase {
             peerLastReadTime: peerRead
         )
 
-        XCTAssertEqual(seen, "m2")
+        XCTAssertNil(seen)
+    }
+
+    func testLastSeenHiddenWhenPeerMessageArrivesAfter() {
+        let t1 = Date(timeIntervalSince1970: 1_000)
+        let t2 = Date(timeIntervalSince1970: 2_000)
+        let messages = [
+            ChatMessage(name: "m2", text: "reply", createTime: t2, sender: ChatSender(name: peer)),
+            ChatMessage(name: "m1", text: "hi", createTime: t1, sender: ChatSender(name: me)),
+        ]
+
+        let seen = MessageSeenReceipt.lastSeenSelfMessageName(
+            in: messages,
+            selfUserName: me,
+            peerLastReadTime: t2
+        )
+
+        XCTAssertNil(seen)
+    }
+
+    func testLastSeenShownWhenReadWithoutLaterPeerMessage() {
+        let t1 = Date(timeIntervalSince1970: 1_000)
+        let t2 = Date(timeIntervalSince1970: 2_000)
+        let messages = [
+            ChatMessage(name: "m1", text: "hi", createTime: t1, sender: ChatSender(name: me)),
+        ]
+
+        let seen = MessageSeenReceipt.lastSeenSelfMessageName(
+            in: messages,
+            selfUserName: me,
+            peerLastReadTime: t2
+        )
+
+        XCTAssertEqual(seen, "m1")
     }
 }
