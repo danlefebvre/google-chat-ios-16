@@ -101,7 +101,7 @@ struct ThreadView: View {
                     Text(conversation?.title ?? "Thread")
                         .font(.headline)
                     if let conversation {
-                        Text("Sending as \(conversation.accountLabel)")
+                        Text(conversation.accountLabel)
                             .font(.caption2.weight(.semibold))
                             .foregroundStyle(Color(hex: conversation.accountColorHex) ?? .secondary)
                     }
