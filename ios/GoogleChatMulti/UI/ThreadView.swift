@@ -16,10 +16,8 @@ struct ThreadView: View {
     @State private var pickerItem: PhotosPickerItem?
     @State private var nextPageToken: String?
     @State private var isLoadingOlder = false
-    /// Scroll to the newest bubble after initial load / send.
+    /// Scroll to the newest bubble after send / attach (flipped list: scroll to `.top`).
     @State private var scrollToNewestRequested = false
-    /// Keep the previously oldest bubble in place after prepending an older page.
-    @State private var preserveScrollMessageId: String?
     /// Message `name` that should show the Seen receipt (DM last-read only).
     @State private var lastSeenMessageName: String?
     /// Peer read cursor when known (linked-account DM) or inferred from replies.
@@ -35,7 +33,6 @@ struct ThreadView: View {
 
     /// Initial / older page size — keep the first paint light so scroll stays usable.
     private static let pageSize = 20
-    private static let scrollBottomID = "thread-scroll-bottom"
 
     var body: some View {
         VStack(spacing: 0) {
@@ -44,9 +41,28 @@ struct ThreadView: View {
                     .foregroundStyle(.red)
                     .padding()
             }
+            // Flipped list: newest-first data stays at visual bottom; older pages APPEND
+            // (visual top) so Load more never needs scroll-anchoring — that path freezes
+            // LazyVStack + ScrollViewReader after a couple of prepends on iOS 16.
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(spacing: 10) {
+                        ForEach(messages) { message in
+                            MessageBubble(
+                                message: message,
+                                senderLabel: senderLabel(for: message),
+                                isFromSelf: isFromSelf(message),
+                                showSeen: message.name == lastSeenMessageName,
+                                accountId: conversation?.accountId,
+                                tokenProvider: model.authStore.asTokenProvider(),
+                                onReact: { unicode in
+                                    await react(to: message, unicode: unicode)
+                                }
+                            )
+                            .id(message.id)
+                            .flippedUpsideDown()
+                        }
+
                         if hasMoreOlder || isLoadingOlder {
                             Button {
                                 Task { await loadOlderMessages() }
@@ -64,38 +80,19 @@ struct ThreadView: View {
                             .buttonStyle(.bordered)
                             .disabled(isLoadingOlder)
                             .accessibilityLabel("Load older messages")
+                            .flippedUpsideDown()
                         }
-
-                        ForEach(messages.reversed()) { message in
-                            MessageBubble(
-                                message: message,
-                                senderLabel: senderLabel(for: message),
-                                isFromSelf: isFromSelf(message),
-                                showSeen: message.name == lastSeenMessageName,
-                                accountId: conversation?.accountId,
-                                tokenProvider: model.authStore.asTokenProvider(),
-                                onReact: { unicode in
-                                    await react(to: message, unicode: unicode)
-                                }
-                            )
-                            .id(message.id)
-                        }
-
-                        Color.clear
-                            .frame(height: 1)
-                            .id(Self.scrollBottomID)
                     }
                     .padding(16)
+                    .flippedUpsideDown()
                 }
                 .onChange(of: messages.count) { _ in
-                    if scrollToNewestRequested {
-                        scrollToBottom(proxy: proxy, animated: true)
-                        scrollToNewestRequested = false
-                    } else if let preserveScrollMessageId {
-                        // Keep the previously top-most bubble visible after prepending.
-                        proxy.scrollTo(preserveScrollMessageId, anchor: .top)
-                        self.preserveScrollMessageId = nil
+                    guard scrollToNewestRequested, let newest = messages.first?.id else { return }
+                    // Flipped: visual bottom == stack start.
+                    withAnimation(.easeOut(duration: 0.2)) {
+                        proxy.scrollTo(newest, anchor: .top)
                     }
+                    scrollToNewestRequested = false
                 }
             }
 
@@ -131,7 +128,7 @@ struct ThreadView: View {
         .background(Color("CanvasBackground").ignoresSafeArea())
     }
 
-    private func load(scrollToNewest: Bool = true) async {
+    private func load() async {
         guard let conversation,
               let api = await apiClient()
         else { return }
@@ -142,10 +139,8 @@ struct ThreadView: View {
         isLoadingOlder = false
         nextPageToken = nil
         scrollToNewestRequested = false
-        preserveScrollMessageId = nil
         lastSeenMessageName = nil
         peerLastReadTime = nil
-        // Clear first so a same-sized reload still bumps `messages.count` and can scroll.
         messages = []
 
         do {
@@ -192,7 +187,7 @@ struct ThreadView: View {
             map[me] = "You"
             memberNames = map
             nextPageToken = response.nextPageToken
-            scrollToNewestRequested = scrollToNewest && !response.messages.isEmpty
+            // Flipped ScrollView opens at the stack start (visual bottom / newest).
             messages = response.messages
             await refreshSeenReceipt(
                 api: api,
@@ -223,8 +218,6 @@ struct ThreadView: View {
         else { return }
 
         isLoadingOlder = true
-        // Newest-first storage: last element is the oldest currently loaded bubble.
-        let anchorId = messages.last?.id
         defer { isLoadingOlder = false }
 
         do {
@@ -236,16 +229,13 @@ struct ThreadView: View {
             )
             await resolveSenderNames(for: response.messages, accountId: conversation.accountId)
 
-            let previousCount = messages.count
+            // Append older page (visual top in the flipped list) — no scrollTo.
             let merged = MessageHistoryPager.mergingOlderPage(messages, olderPage: response.messages)
             nextPageToken = response.nextPageToken
-            if merged.count > previousCount, let anchorId {
-                preserveScrollMessageId = anchorId
-            }
             messages = merged
             updateLastSeenMessageName(using: merged)
         } catch {
-            // Keep the current page token so scrolling up can retry.
+            // Keep the current page token so Load more can retry.
             model.banner = "Couldn’t load older messages."
         }
     }
@@ -315,7 +305,7 @@ struct ThreadView: View {
                 messageName: message.name,
                 unicode: unicode
             )
-            await load(scrollToNewest: false)
+            await load()
         } catch {
             model.banner = "Reaction failed."
         }
@@ -422,20 +412,13 @@ struct ThreadView: View {
     private func apiClient() async -> ChatAPIClient? {
         ChatAPIClient(tokens: model.authStore.asTokenProvider())
     }
+}
 
-    private func scrollToBottom(proxy: ScrollViewProxy, animated: Bool) {
-        let scroll = {
-            proxy.scrollTo(Self.scrollBottomID, anchor: .bottom)
-        }
-        if animated {
-            withAnimation(.easeOut(duration: 0.2), scroll)
-        } else {
-            scroll()
-        }
-        // LazyVStack often needs a second pass after cells measure.
-        DispatchQueue.main.async {
-            proxy.scrollTo(Self.scrollBottomID, anchor: .bottom)
-        }
+private extension View {
+    /// Pair on the ScrollView content and each row so a newest-first array renders
+    /// bottom-up without prepending pages (avoids iOS 16 LazyVStack scroll freezes).
+    func flippedUpsideDown() -> some View {
+        rotationEffect(.degrees(180))
     }
 }
 
