@@ -33,6 +33,10 @@ struct ThreadView: View {
         MessageHistoryPager.hasMorePages(nextPageToken: nextPageToken)
     }
 
+    /// Initial / older page size — keep the first paint light so scroll stays usable.
+    private static let pageSize = 20
+    private static let scrollBottomID = "thread-scroll-bottom"
+
     var body: some View {
         VStack(spacing: 0) {
             if let loadError {
@@ -44,16 +48,22 @@ struct ThreadView: View {
                 ScrollView {
                     LazyVStack(spacing: 10) {
                         if hasMoreOlder || isLoadingOlder {
-                            HStack {
-                                Spacer()
-                                ProgressView()
-                                    .opacity(isLoadingOlder ? 1 : 0)
-                                Spacer()
-                            }
-                            .frame(height: 36)
-                            .onAppear {
+                            Button {
                                 Task { await loadOlderMessages() }
+                            } label: {
+                                HStack(spacing: 8) {
+                                    if isLoadingOlder {
+                                        ProgressView()
+                                    }
+                                    Text(isLoadingOlder ? "Loading…" : "Load more")
+                                        .font(.subheadline.weight(.semibold))
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 10)
                             }
+                            .buttonStyle(.bordered)
+                            .disabled(isLoadingOlder)
+                            .accessibilityLabel("Load older messages")
                         }
 
                         ForEach(messages.reversed()) { message in
@@ -70,16 +80,19 @@ struct ThreadView: View {
                             )
                             .id(message.id)
                         }
+
+                        Color.clear
+                            .frame(height: 1)
+                            .id(Self.scrollBottomID)
                     }
                     .padding(16)
                 }
                 .onChange(of: messages.count) { _ in
-                    if scrollToNewestRequested, let newest = messages.first?.id {
-                        withAnimation(.easeOut(duration: 0.2)) {
-                            proxy.scrollTo(newest, anchor: .bottom)
-                        }
+                    if scrollToNewestRequested {
+                        scrollToBottom(proxy: proxy, animated: true)
                         scrollToNewestRequested = false
                     } else if let preserveScrollMessageId {
+                        // Keep the previously top-most bubble visible after prepending.
                         proxy.scrollTo(preserveScrollMessageId, anchor: .top)
                         self.preserveScrollMessageId = nil
                     }
@@ -132,6 +145,8 @@ struct ThreadView: View {
         preserveScrollMessageId = nil
         lastSeenMessageName = nil
         peerLastReadTime = nil
+        // Clear first so a same-sized reload still bumps `messages.count` and can scroll.
+        messages = []
 
         do {
             var map = memberNames
@@ -160,7 +175,7 @@ struct ThreadView: View {
             let response = try await api.listMessages(
                 accountId: conversation.accountId,
                 spaceName: conversation.spaceName,
-                pageSize: 40
+                pageSize: Self.pageSize
             )
             candidateUserNames.formUnion(response.messages.compactMap(\.sender?.name))
 
@@ -216,7 +231,7 @@ struct ThreadView: View {
             let response = try await api.listMessages(
                 accountId: conversation.accountId,
                 spaceName: conversation.spaceName,
-                pageSize: 40,
+                pageSize: Self.pageSize,
                 pageToken: pageToken
             )
             await resolveSenderNames(for: response.messages, accountId: conversation.accountId)
@@ -406,6 +421,21 @@ struct ThreadView: View {
 
     private func apiClient() async -> ChatAPIClient? {
         ChatAPIClient(tokens: model.authStore.asTokenProvider())
+    }
+
+    private func scrollToBottom(proxy: ScrollViewProxy, animated: Bool) {
+        let scroll = {
+            proxy.scrollTo(Self.scrollBottomID, anchor: .bottom)
+        }
+        if animated {
+            withAnimation(.easeOut(duration: 0.2), scroll)
+        } else {
+            scroll()
+        }
+        // LazyVStack often needs a second pass after cells measure.
+        DispatchQueue.main.async {
+            proxy.scrollTo(Self.scrollBottomID, anchor: .bottom)
+        }
     }
 }
 
