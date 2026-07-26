@@ -95,16 +95,20 @@ struct FilterChipBar: View {
     }
 
     private func chip(_ title: String, selected: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(title)
-                .font(.subheadline.weight(.semibold))
-                .padding(.horizontal, 12)
-                .padding(.vertical, 7)
-                .foregroundStyle(selected ? Color("ChipSelectedText") : Color("ChipText"))
-                .background(selected ? Color("ChipSelectedFill") : Color("ChipFill"))
-                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-        }
-        .buttonStyle(.plain)
+        // Hardcoded colors (not asset-catalog names): Buttons on iOS 16 can ignore
+        // named Color("…") foregrounds / apply tint, leaving dark text on blue.
+        Text(title)
+            .font(.subheadline.weight(.semibold))
+            .padding(.horizontal, 12)
+            .padding(.vertical, 7)
+            .foregroundColor(selected ? .white : .black)
+            .background(selected ? Color(red: 0, green: 0.478, blue: 1) : Color(white: 0.91))
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .onTapGesture(perform: action)
+            .accessibilityAddTraits(.isButton)
+            .accessibilityAddTraits(selected ? .isSelected : [])
+            .accessibilityLabel(title)
     }
 }
 
@@ -143,22 +147,15 @@ struct AccountBadge: View {
     let colorHex: String
 
     var body: some View {
-        Text(shortLabel)
+        Text(label)
             .font(.caption2.weight(.bold))
-            .foregroundStyle(.white)
-            .frame(width: 44, height: 24)
+            .foregroundColor(.white)
+            .lineLimit(1)
+            .padding(.horizontal, 8)
+            .frame(height: 24)
             .background(Color(hex: colorHex) ?? .orange)
             .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
             .accessibilityLabel(label)
-    }
-
-    private var shortLabel: String {
-        if label.localizedCaseInsensitiveContains("work") { return "Work" }
-        if label.localizedCaseInsensitiveContains("personal")
-            || label.localizedCaseInsensitiveContains("home") {
-            return "Home"
-        }
-        return String(label.prefix(4))
     }
 }
 
